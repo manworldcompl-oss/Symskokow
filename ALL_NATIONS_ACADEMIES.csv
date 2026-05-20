@@ -1,0 +1,165 @@
+Reprezentacja;Kraj;Continent;Faker_Locale
+Albania;ALB;Europe;hr_HR
+Andora;AND;Europe;es_ES
+Austria;AUT;Europe;de_AT
+Belgia;BEL;Europe;nl_BE
+Bia³oruœ;BLR;Europe;ru_RU
+Boœnia i Hercegowina;BIH;Europe;hr_HR
+Bu³garia;BUL;Europe;bg_BG
+Chorwacja;CRO;Europe;hr_HR
+Czarnogóra;MNE;Europe;hr_HR
+Czechy;CZE;Europe;cs_CZ
+Dania;DEN;Europe;da_DK
+Estonia;EST;Europe;et_EE
+Finlandia;FIN;Europe;fi_FI
+Francja;FRA;Europe;fr_FR
+Gibraltar;GIB;Europe;en_GB
+Grecja;GRE;Europe;el_GR
+Hiszpania;ESP;Europe;es_ES
+Holandia;NED;Europe;nl_NL
+Irlandia;IRL;Europe;en_IE
+Islandia;ISL;Europe;is_IS
+Kosowo;KOS;Europe;hr_HR
+Liechtenstein;LIE;Europe;de_LI
+Litwa;LTU;Europe;lt_LT
+Luksemburg;LUX;Europe;lb_LU
+£otwa;LAT;Europe;lv_LV
+Macedonia Pó³nocna;MKD;Europe;hr_HR
+Malta;MLT;Europe;mt_MT
+Mo³dawia;MDA;Europe;ro_RO
+Monako;MON;Europe;fr_FR
+Niemcy;GER;Europe;de_DE
+Norwegia;NOR;Europe;no_NO
+Polska;POL;Europe;pl_PL
+Portugalia;POR;Europe;pt_PT
+Rosja;RUS;Europe;ru_RU
+Rumunia;ROU;Europe;ro_RO
+San Marino;SMR;Europe;it_IT
+Serbia;SRB;Europe;hr_HR
+S³owacja;SVK;Europe;sk_SK
+S³owenia;SLO;Europe;sl_SI
+Szwajcaria;SUI;Europe;de_CH
+Szwecja;SWE;Europe;sv_SE
+Ukraina;UKR;Europe;uk_UA
+Wêgry;HUN;Europe;hu_HU
+Wielka Brytania;GBR;Europe;en_GB
+W³ochy;ITA;Europe;it_IT
+Wyspy Owcze;FRO;Europe;da_DK
+Afganistan;AFG;Asia;fa_IR
+Arabia Saudyjska;KSA;Asia;ar_SA
+Armenia;ARM;Asia;hy_AM
+Azerbejd¿an;AZE;Asia;az_AZ
+Bahrajn;BRN;Asia;ar_BH
+Bangladesz;BAN;Asia;bn_BD
+Bhutan;BHU;Asia;ne_NP
+Chiny;CHN;Asia;zh_CN
+Cypr;CYP;Asia;el_GR
+Filipiny;PHI;Asia;fil_PH
+Gruzja;GEO;Asia;ka_GE
+Hongkong;HKG;Asia;zh_TW
+Indie;IND;Asia;hi_IN
+Indonezja;INA;Asia;id_ID
+Irak;IRQ;Asia;ar_JO
+Iran;IRI;Asia;fa_IR
+Izrael;ISR;Asia;he_IL
+Japonia;JPN;Asia;ja_JP
+Jemen;YEM;Asia;ar_SA
+Katar;QAT;Asia;ar_AE
+Kazachstan;KAZ;Asia;ru_RU
+Kirgistan;KGZ;Asia;ru_RU
+Korea Po³udniowa;KOR;Asia;ko_KR
+Laos;LAO;Asia;th_TH
+Malezja;MAS;Asia;ms_MY
+Mjanma;MYA;Asia;en_US
+Mongolia;MGL;Asia;ru_RU
+Nepal;NEP;Asia;ne_NP
+Pakistan;PAK;Asia;en_PK
+Singapur;SIN;Asia;en_PH
+Sri Lanka;SRI;Asia;en_US
+Tad¿ykistan;TJK;Asia;ru_RU
+Tajlandia;THA;Asia;th_TH
+Tajwan;TPE;Asia;zh_TW
+Turcja;TUR;Asia;tr_TR
+Uzbekistan;UZB;Asia;uz_UZ
+Wietnam;VIE;Asia;vi_VN
+Zjednoczone Emiraty Arabskie;UAE;Asia;ar_AE
+Bahamy;BAH;North America;en_US
+Barbados;BAR;North America;en_US
+Belize;BIZ;North America;en_US
+Bermudy;BER;North America;en_US
+Curacao;CUW;North America;nl_NL
+Dominika;DMA;North America;en_US
+Dominikana;DOM;North America;es_MX
+Grenlandia;GRL;North America;da_DK
+Gwatemala;GUA;North America;es_MX
+Haiti;HAI;North America;fr_FR
+Honduras;HON;North America;es_MX
+Jamajka;JAM;North America;en_US
+Kanada;CAN;North America;en_CA
+Kostaryka;CRC;North America;es_MX
+Kuba;CUB;North America;es_ES
+Meksyk;MEX;North America;es_MX
+Nikaragua;NCA;North America;es_MX
+Panama;PAN;North America;es_MX
+Portoryko;PUR;North America;es_MX
+Saint Kitts and Nevis;SKN;North America;en_US
+Saint Lucia;LCA;North America;en_US
+Salwador;ESA;North America;es_MX
+Stany Zjednoczone;USA;North America;en_US
+Trynidad i Tobago;TRI;North America;en_US
+Argentyna;ARG;South America;es_AR
+Boliwia;BOL;South America;es_AR
+Brazylia;BRA;South America;pt_BR
+Chile;CHI;South America;es_CL
+Ekwador;ECU;South America;es_CO
+Gujana;GUY;South America;en_US
+Kolumbia;COL;South America;es_CO
+Paragwaj;PAR;South America;es_AR
+Peru;PER;South America;es_AR
+Surinam;SUR;South America;nl_NL
+Urugwaj;URU;South America;es_AR
+Wenezuela;VEN;South America;es_CO
+Algieria;ALG;Africa;fr_FR
+Burkina Faso;BUR;Africa;zu_ZA
+Czad;CHA;Africa;fr_FR
+Demokratyczna Republika Konga;COD;Africa;fr_FR
+Egipt;EGY;Africa;ar_EG
+Etiopia;ETH;Africa;zu_ZA
+Ghana;GHA;Africa;en_GH
+Gwinea;GUI;Africa;fr_FR
+Gwinea Bissau;GBS;Africa;pt_PT
+Kamerun;CMR;Africa;fr_FR
+Kenia;KEN;Africa;en_KE
+Libia;LBA;Africa;ar_LY
+Madagaskar;MAD;Africa;fr_FR
+Mali;MLI;Africa;fr_FR
+Maroko;MAR;Africa;ar_SA
+Mozambik;MOZ;Africa;pt_PT
+Namibia;NAM;Africa;en_US
+Nigeria;NGR;Africa;en_NG
+Republika Po³udniowej Afryki;RPA;Africa;zu_ZA
+Republika Zielonego Przyl¹dka;CPV;Africa;pt_PT
+Rwanda;RWA;Africa;en_US
+Senegal;SEN;Africa;fr_FR
+Sierra Leone;SLE;Africa;en_US
+Somalia;SOM;Africa;ar_SA
+Sudan;SUD;Africa;ar_EG
+Tanzania;TAN;Africa;en_US
+Tunezja;TUN;Africa;ar_DZ
+Uganda;UGA;Africa;en_US
+Wybrze¿e Koœci S³oniowej;CIV;Africa;fr_FR
+Australia;AUS;Oceania;en_AU
+Fid¿i;FIJ;Oceania;en_AU
+Kiribati;KIR;Oceania;en_AU
+Mikronezja;FSM;Oceania;en_US
+Nauru;NRU;Oceania;en_AU
+Nowa Zelandia;NZL;Oceania;en_NZ
+Palau;PLW;Oceania;en_US
+Papua-Nowa Gwinea;PNG;Oceania;en_AU
+Samoa;SAM;Oceania;en_NZ
+Tonga;TGA;Oceania;en_NZ
+Tuvalu;TUV;Oceania;en_NZ
+Vanuatu;VAN;Oceania;fr_FR
+Wyspy Cooka;COK;Oceania;en_NZ
+Wyspy Marshalla;MHL;Oceania;en_US
+Wyspy Salomona;SOL;Oceania;en_AU

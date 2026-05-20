@@ -1,0 +1,165 @@
+Reprezentacja;Kraj;Continent
+Albania;ALB;Europe
+Andora;AND;Europe
+Austria;AUT;Europe
+Belgia;BEL;Europe
+Bia³oruœ;BLR;Europe
+Boœnia i Hercegowina;BIH;Europe
+Bu³garia;BUL;Europe
+Chorwacja;CRO;Europe
+Czarnogóra;MNE;Europe
+Czechy;CZE;Europe
+Dania;DEN;Europe
+Estonia;EST;Europe
+Finlandia;FIN;Europe
+Francja;FRA;Europe
+Gibraltar;GIB;Europe
+Grecja;GRE;Europe
+Hiszpania;ESP;Europe
+Holandia;NED;Europe
+Irlandia;IRL;Europe
+Islandia;ISL;Europe
+Kosowo;KOS;Europe
+Liechtenstein;LIE;Europe
+Litwa;LTU;Europe
+Luksemburg;LUX;Europe
+£otwa;LAT;Europe
+Macedonia Pó³nocna;MKD;Europe
+Malta;MLT;Europe
+Mo³dawia;MDA;Europe
+Monako;MON;Europe
+Niemcy;GER;Europe
+Norwegia;NOR;Europe
+Polska;POL;Europe
+Portugalia;POR;Europe
+Rosja;RUS;Europe
+Rumunia;ROU;Europe
+San Marino;SMR;Europe
+Serbia;SRB;Europe
+S³owacja;SVK;Europe
+S³owenia;SLO;Europe
+Szwajcaria;SUI;Europe
+Szwecja;SWE;Europe
+Ukraina;UKR;Europe
+Wêgry;HUN;Europe
+Wielka Brytania;GBR;Europe
+W³ochy;ITA;Europe
+Wyspy Owcze;FRO;Europe
+Afganistan;AFG;Asia
+Arabia Saudyjska;KSA;Asia
+Armenia;ARM;Asia
+Azerbejd¿an;AZE;Asia
+Bahrajn;BRN;Asia
+Bangladesz;BAN;Asia
+Bhutan;BHU;Asia
+Chiny;CHN;Asia
+Cypr;CYP;Asia
+Filipiny;PHI;Asia
+Gruzja;GEO;Asia
+Hongkong;HKG;Asia
+Indie;IND;Asia
+Indonezja;INA;Asia
+Irak;IRQ;Asia
+Iran;IRI;Asia
+Izrael;ISR;Asia
+Japonia;JPN;Asia
+Jemen;YEM;Asia
+Katar;QAT;Asia
+Kazachstan;KAZ;Asia
+Kirgistan;KGZ;Asia
+Korea Po³udniowa;KOR;Asia
+Laos;LAO;Asia
+Malezja;MAS;Asia
+Mjanma;MYA;Asia
+Mongolia;MGL;Asia
+Nepal;NEP;Asia
+Pakistan;PAK;Asia
+Singapur;SIN;Asia
+Sri Lanka;SRI;Asia
+Tad¿ykistan;TJK;Asia
+Tajlandia;THA;Asia
+Tajwan;TPE;Asia
+Turcja;TUR;Asia
+Uzbekistan;UZB;Asia
+Wietnam;VIE;Asia
+Zjednoczone Emiraty Arabskie;UAE;Asia
+Bahamy;BAH;North America
+Barbados;BAR;North America
+Belize;BIZ;North America
+Bermudy;BER;North America
+Curacao;CUW;North America
+Dominika;DMA;North America
+Dominikana;DOM;North America
+Grenlandia;GRL;North America
+Gwatemala;GUA;North America
+Haiti;HAI;North America
+Honduras;HON;North America
+Jamajka;JAM;North America
+Kanada;CAN;North America
+Kostaryka;CRC;North America
+Kuba;CUB;North America
+Meksyk;MEX;North America
+Nikaragua;NCA;North America
+Panama;PAN;North America
+Portoryko;PUR;North America
+Saint Kitts and Nevis;SKN;North America
+Saint Lucia;LCA;North America
+Salwador;ESA;North America
+Stany Zjednoczone;USA;North America
+Trynidad i Tobago;TRI;North America
+Argentyna;ARG;South America
+Boliwia;BOL;South America
+Brazylia;BRA;South America
+Chile;CHI;South America
+Ekwador;ECU;South America
+Gujana;GUY;South America
+Kolumbia;COL;South America
+Paragwaj;PAR;South America
+Peru;PER;South America
+Surinam;SUR;South America
+Urugwaj;URU;South America
+Wenezuela;VEN;South America
+Algieria;ALG;Africa
+Burkina Faso;BUR;Africa
+Czad;CHA;Africa
+Demokratyczna Republika Konga;COD;Africa
+Egipt;EGY;Africa
+Etiopia;ETH;Africa
+Ghana;GHA;Africa
+Gwinea;GUI;Africa
+Gwinea Bissau;GBS;Africa
+Kamerun;CMR;Africa
+Kenia;KEN;Africa
+Libia;LBA;Africa
+Madagaskar;MAD;Africa
+Mali;MLI;Africa
+Maroko;MAR;Africa
+Mozambik;MOZ;Africa
+Namibia;NAM;Africa
+Nigeria;NGR;Africa
+Republika Po³udniowej Afryki;RPA;Africa
+Republika Zielonego Przyl¹dka;CPV;Africa
+Rwanda;RWA;Africa
+Senegal;SEN;Africa
+Sierra Leone;SLE;Africa
+Somalia;SOM;Africa
+Sudan;SUD;Africa
+Tanzania;TAN;Africa
+Tunezja;TUN;Africa
+Uganda;UGA;Africa
+Wybrze¿e Koœci S³oniowej;CIV;Africa
+Australia;AUS;Oceania
+Fid¿i;FIJ;Oceania
+Kiribati;KIR;Oceania
+Mikronezja;FSM;Oceania
+Nauru;NRU;Oceania
+Nowa Zelandia;NZL;Oceania
+Palau;PLW;Oceania
+Papua-Nowa Gwinea;PNG;Oceania
+Samoa;SAM;Oceania
+Tonga;TGA;Oceania
+Tuvalu;TUV;Oceania
+Vanuatu;VAN;Oceania
+Wyspy Cooka;COK;Oceania
+Wyspy Marshalla;MHL;Oceania
+Wyspy Salomona;SOL;Oceania

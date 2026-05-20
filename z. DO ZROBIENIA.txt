@@ -1,0 +1,143 @@
+#24.01
+- CC, MSC, NTC jest chyba już całkiem zrobione, tylko zamiast NTC jest SWISS
+- MSC chyba działa dobrze, jedynie co to można sprawdzić żeby w fazie pucharowej było wpisane 1/0 zamiast punktów, ale wydaje mi się, że tak też jest spoko
+
+- Zakładka 'Przegląd' w IND w KWotach Startowych w Kwoty jest niepotrzebna chyba
+- IND -> Zawodnicy i baza zawodników po lewej stronie jest za szeroka, ucina Liste Startową po prawej
+- Klasyfikacje można rozciągnąć bardziej w dół
+
+#25.01
+- Zrobiłem liczenie WCH, OG itd. do Rankingu FIS
+- Zrobiłem liczenie TCS, BB, FT itd. do Rankingu FIS
+- Prawdopodobnie Ranking FIS jest już dobrze zrobiony
+- Przydałoby się zrobić przy wpisywaniu nazwy pliku dla mistrzostw, żeby była lista, aktualnie nazwy powinny wyglądać tak: S38_WCH_M_IND_NORMAL = <Sezon>_<Mistrzostwa>_<Płeć>_<IND/TEAM>_<NORMAL/LARGE>.
+
+#26.01
+- Zrobiłem, żeby nazwy pliku dla mistrzostw były tworzone z 4 pól wyboru, czyli zrobiłem ostatni podpunkt z dnia wcześniejszego.
+
+#28.01
+- Zrobiłem zakładkę TYGODNIE w Kalendarzach, więc widać ładnie tydzień po tygodniu jakie są zawody
+- Potrzebuję jeszcze zrobić zakładkę z miejscami, gdzie odbywały się już turnieje, na przyszłość powinno ułatwić to tworzenie kalendarzy z mistrzostwami typu OG, WCH itd. -----> Plik znajduje sie na pulpicie, tylko go zrobić do programu
+- Trzeba jasno określić zasady wyboru gospodarzy na turnieje, żebym sobie tak o nie wybierał.
+- Można dodać losowanie skoczni z tych co są w programie, żeby jakaś konkretna o podanych filtrach wyskoczyła = łatwiejszy wybór.
+
+#30.01
+- Zrobiona historia turniejów i sortowanie w niej.
+
+#31.01
+- Zrobiona zakładka wymagania na organizację turniejów
+- Zrobiona zakładka, która pokazuje, kto może organizować dany turniej w tym sezonie na podstawie tego kto organizował w przeszłości
+- Do zrobienia jeszcze tylko COCH, ale to chyba trzeba będzie podzielić kraje w którymś z plików na kontynenty, ale też żeby nie zepsuć struktury pliku - do przemyślenia
+
+#01.02
+- Zrobione wypisywanie skoczni do COCH
+- Dodane flagi
+- Zrobione losowanie skoczni.
+- Zabieram się za robienie Finansów. Z tego co widzę, nic automatycznie się nie aktualizuje w pliku z Finansami, więc trzeba będzie pokombinować jak tam wszystko podpiąć. 
+- Zrobione aktualizowanie kolumn: Sz, Ek, In, Ed
+- Zrobione aktualizowanie kolumn Sponsor Główny i Sponsor Techniczny
+- Zrobione aktualizowanie kolumn Sztab, Sztab Ek
+- Zrobione aktualizowanie kolumn Skocznie, Skocznie In
+- Zrobione aktualizowanie kolumn Infrastruktura, Rozb Infr
+- Zrobione aktualizowanie kolumn Rozb Skoczni
+- Znalazłem problem: przydałoby się zrobić, żeby koszty utrzymania skoczni same się aktualizowały i eksportowały, bo na razie to trzeba wchodzić w finanse i ręcznie to eksportować.
+- Można ze skoczni usunąć wszystko związane z plikiem Koszty utrzymania skoczni S38, bo znalazłem inny sposób na ich liczenie.
+
+#02.02
+- Zrobione Podsumowanie kosztów z Akademii.
+- Podpięte liczenie Akademii w Finansach
+- Zrobiony nowy moduł Obozy i podpięty do Embded, liczy koszty obozów, można przenosić zawodników na obóz i spowrotem, jeszcze tylko podpiąć koszty pod finanse.
+- Podpięte koszty obozów pod Finanse, obozy lecz. zostawione na 0 w spokoju.
+- Do zrobienia w Finansach jeszcze Konkursy, Nagrody. Do tego sumowanie całości do budżetu końcowego, liczenie nadwyżki, wstawianie gwiazdek i budżetu startowego na nowy sezon. Do tego można dodać chyba przycisk, który będzie zerował finanse i przygotowywał nowy plik na kolejny sezon (może wyskakujące okienko z wpisaniem sezonu). A i jeszcze trzeba pomyśleć jak ogarnąć pożyczki.
+
+#06.02
+- Zacząłem robić nagrody za konkursy
+
+#07.02
+- Skończyłem robić nagrody za konkursy
+- Podpiąłem liczenie kasy za konkursy do Finansów
+
+#08.02
+- Zacząłem robić podchody pod aktualizowanie nagród. Na razie dodałem to, że w klasyfikacjach będą znajdowały się kolumny z tym ile 1, 2, 3 miejsc zajęli zawodnicy.
+- Trzeba też zrobić to dla WC-M, WC-W, GP-M, GP-W w teamówkach.
+- Zacząłem pisać zapytanie pod nagrody, na razie zrobiłem turnieje, a jeszcze do zrobienia teamówki i wszystkie mistrzostwa (OG, WCH itd)
+
+#11.02
+- Zrobione Nagrody i podpięte pod plik z finansami. Nie wiem w jakim module umieścić program z Nagrodami, żeby było ładnie je widać i też nie ścinało za bardzo programu, bo lekko ścina, może finanse
+
+#13.02
+- Zrobione miejsca 1,2,3 do teamówek jeżeli jest aktualizacja klasyfikacji
+- Zrobiono w Rankingu FIS eksport i import plików
+- Zrobiony nowy przycisk do liczenia Budżetu, Nadwyżki, Gwiazdek na nowy sezon i budżetu na nowy sezon
+- Zostało jeszcze jedno miejsce na przycisk, który będzie robił czyste finanse na nowy sezon
+
+#17.02
+- Zrobiłem przycisk do robienia nowego sezonu, wystarczy podać nazwę sezonu.
+- Podpiąłem Nagrody do głównego GUI, bo do finansów się nie da.
+- Chciałbym zacząć robić GUI do tworzenia kalendarzy.
+
+#19.02
+- Zaczałem robić GUI dla planowania nowego sezonu (kalendarze)
+
+#22.02
+- Skończyłem robić GUI do planowania nowego sezonu (kalendarze) // 3 dni jebania z tym było
+- Zrobiłem generowanie imion i nazwisk w Akademiach
+- Zrobione przenoszenie wyciągniętych zawodników do kadry
+- Zrobione losowanie sztabów na nowy sezon.
+- Poprawiłem widok klasyfikacji (tylko rozciągnąłem)
+- Dodałem flagi w bazie
+- Dodałem przycisk do posortowania bazy danych
+
+#24.02
+- Dodałem do wyboru w kwotach startowych COCH, bo nie było
+- Zakładka Przegląd w Kwotach startowych jest chyba jednak potrzebna, bo podpięte tam jest filtrowanie itd., więc jej nie ruszam
+- Zacząłem robić Osiągnięcia, sporo zrobione, co można jeszcze zrobić napisałem niżej
+
+#26.02
+- Zrobione teamówki w osiągnięciach
+- Zacząłem robić staystyki w osiągnięciach, trzeba sprawdzać czy wszystko działa odpowiednio, bo jak jedno poprawiam to drugie się psuje.
+
+#28.02
+- Nowa wersja osiągnięć, fajnie działa, małe poprawki jeszcze trzeba zrobić.
+- Obecnie nie liczy statystyk w turniejach, a liczyło, więc coś się zjebało
+- Dodać jeszcze teamówki do statystyk
+- Zrobić, żeby w statystykach nie wyświetlało AUT, JPN tylko Austria, Japonia
+
+#01.03
+- Statystyki już mają wszystko w sobie poza aktualizacją plików o nowe sezony
+
+#05.03
+- Dodane działanie bazy danych z rekordami zawodników, ilością konkursów, punktami
+- Dodane że jeżeli jest drużynówka, to po zaznaczeniu przycisku w kwotach zawodnik z COCa nie startuje (dla 9-11 w klasyfikacji ofc)
+- Zrobione, że w KO64 są upadki
+- Zrobione, że wyniki KO64 wyświetlają się normalnie w podglądzie
+- Zrobione, żeby normalnie KO64 zapisywało do wyników mistrzostw
+
+#08.03
+- Skończony S38, troche mam poprawek do zrobienia
+- Dodałem aktualizację bazy zawodników na nowy sezon (spadek UM, wzrost wieku, koniec kariery itd.)
+
+#09.03
+- Dodane przyciski do aktualizacji osiągnięć
+- Poprawiona logika rozbudowy skoczni + dodany checkbox, że wyświetla w rozbudowie aktualną skocznię jeżeli dodaje nową skocznie do kompleksu
+- Dodany przycisk w Kalendarze do uaktualnienia Historia Turniejów.csv
+- Dodane potwierdzenie czy chce zaktualizować ten turniej (żebym np. 2 razy nie zapisał tego samego konkursu
+- Dodana klasyfikacja lotów.
+- Rekordy skoczni, kraju i świata w baza.db
+- Wyciągnięci zawodnicy z Akademii będą też dodawani do baza.db
+
+#10.03
+- Dodane tworzenie seedów do swiss na nowy sezon z rankingu FIS ALL
+- Awanse i spadki juniorów
+
+########## KIEDYŚ ###############
+
+Finanse:
+- Sortowanie zrobić, żeby dało się sortować po REPREZENTACJA/KRAJ, ale to niekoniecznie
+
+IND GUI:
+- Zakładka Zawodnicy: Baza zawodników po lewej stronie jest za szeroka, ucina Liste Startową po prawej
+
+OSIĄGNIĘCIA:
+- Nie podpinać pod główny program, bo QtFast
+- Można dodać filtrowanie po sezonach
