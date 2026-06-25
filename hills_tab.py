@@ -77,6 +77,177 @@ HOMOLOGATION_SPEC = {
     },
 }
 
+# ── Klasa operacyjna: stałe ──────────────────────────────────────────────────
+_OP_CHOICES = ["Pełna", "COC", "Minimalna"]
+_OP_MULTIPLIERS = {"Pełna": 1.0, "COC": 0.6, "Minimalna": 0.2}
+
+_POC_SCORE = {"wyborny": 4, "dobry": 3, "sredni": 2, "sredni": 2, "niski": 1, "-": 0, "": 0}
+_TW_SCORE  = {"elektr.": 2, "elektr": 2, "zwykla": 1, "zwykła": 1, "-": 0, "": 0}
+_NAS_SCORE = {"b": 2, "a": 1, "-": 0, "": 0}
+
+_TW_DEGRADE  = {"elektr.": "zwykła", "elektr": "zwykła", "zwykła": "-", "zwykla": "-", "-": "-"}
+_NAS_DEGRADE = {"b": "A", "a": "-", "-": "-"}
+
+
+def _compute_current_fis_class(row) -> str:
+    """Oblicza najwyższą klasę FIS jaką kompleks aktualnie spełnia."""
+    def _v(col):
+        return str(row.get(col) or "-").strip()
+
+    seats = _to_int_safe(_v("Miejsca dla kibicow"))
+    os_v  = _to_int_safe(_v("OS"))
+    tw    = _norm_str(_v("Tw"))
+    poc   = _norm_str(_v("Poc"))
+    nas   = _norm_str(_v("Nas"))
+    kk    = _v("Kk")
+    ks    = _v("Ks")
+    sia   = _v("Sia")
+
+    poc_s = _POC_SCORE.get(poc, 0)
+    tw_s  = _TW_SCORE.get(tw, 0)
+    nas_s = _NAS_SCORE.get(nas, 0)
+
+    def kk_num():
+        m = re.search(r"(\d+)", kk)
+        return int(m.group(1)) if m else 0
+
+    checks = [
+        ("OLYMPIC CLASS",       seats >= 15000 and os_v >= 1000 and tw_s >= 2 and kk_num() >= 5
+                                and ks == "+" and poc_s >= 4 and sia == "+" and nas_s >= 2),
+        ("WORLD CUP CLASS",     seats >= 10000 and os_v >= 500  and tw_s >= 2 and kk_num() >= 4
+                                and ks == "+" and poc_s >= 3 and sia == "+" and nas_s >= 1),
+        ("CONTINENTAL CUP CLASS", seats >= 2500 and tw_s >= 1 and ks == "+" and poc_s >= 2),
+        ("JUNIOR CUP CLASS",    tw_s >= 1),
+    ]
+    for name, ok in checks:
+        if ok:
+            return name
+    return "Brak klasy"
+
+
+def load_operational_classes(path) -> pd.DataFrame:
+    """Wczytuje Klasa operacyjna S45.csv lub zwraca pusty DataFrame."""
+    p = Path(path)
+    if p.exists():
+        for enc in ("utf-8", "utf-8-sig", "cp1250"):
+            try:
+                df = pd.read_csv(p, sep=";", dtype=str, encoding=enc)
+                df.columns = [c.strip() for c in df.columns]
+                return df
+            except Exception:
+                pass
+    return pd.DataFrame(columns=["Kraj", "Miasto", "Klasa", "Sezony_MIN"])
+
+
+def save_operational_classes(df: pd.DataFrame, path):
+    p = Path(path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(p, sep=";", index=False, encoding="utf-8")
+
+
+def apply_operational_multipliers(df_rows: pd.DataFrame, df_op: pd.DataFrame) -> pd.DataFrame:
+    """
+    Stosuje mnożniki klasy operacyjnej do df_rows (per kompleks),
+    agreguje wynik po Kraju i zwraca DataFrame z kolumnami [Kraj, Suma].
+    """
+    if df_rows is None or df_rows.empty:
+        return pd.DataFrame(columns=["Kraj", "Suma"])
+
+    op_lookup: dict = {}
+    if df_op is not None and not df_op.empty:
+        for _, r in df_op.iterrows():
+            k = (str(r.get("Kraj", "")).strip().upper(), str(r.get("Miasto", "")).strip())
+            op_lookup[k] = str(r.get("Klasa", "Pełna")).strip()
+
+    out = df_rows.copy()
+    out["_mult"] = out.apply(
+        lambda r: _OP_MULTIPLIERS.get(
+            op_lookup.get((str(r.get("Kraj","")).strip().upper(), str(r.get("Miasto","")).strip()), "Pełna"),
+            1.0
+        ), axis=1
+    )
+    out["Suma_eff"] = (pd.to_numeric(out["Suma"], errors="coerce").fillna(0) * out["_mult"]).round(0).astype(int)
+
+    by_country = out.groupby("Kraj", dropna=False)["Suma_eff"].sum().reset_index()
+    by_country.rename(columns={"Suma_eff": "Suma"}, inplace=True)
+    return by_country
+
+
+def apply_season_end_degradation(df_op: pd.DataFrame, hills_path) -> tuple:
+    """
+    Przetwarza koniec sezonu:
+      • Minimalna → Sezony_MIN += 1 ; inaczej → 0
+      • Gdy Sezony_MIN osiągnie 3: degraduje Tw i Naś w Skocznie CSV, reset do 0
+    Zwraca (df_op_updated, lista komunikatów o degradacjach).
+    """
+    df = df_op.copy()
+    if "Sezony_MIN" not in df.columns:
+        df["Sezony_MIN"] = 0
+    df["Sezony_MIN"] = pd.to_numeric(df["Sezony_MIN"], errors="coerce").fillna(0).astype(int)
+
+    to_degrade = []
+    for idx, row in df.iterrows():
+        klasa = str(row.get("Klasa", "Pełna")).strip()
+        s = int(row.get("Sezony_MIN", 0))
+        s = s + 1 if klasa == "Minimalna" else 0
+        df.at[idx, "Sezony_MIN"] = s
+        if s >= 3:
+            to_degrade.append((str(row.get("Kraj", "")).strip().upper(),
+                                str(row.get("Miasto", "")).strip()))
+            df.at[idx, "Sezony_MIN"] = 0
+
+    messages = []
+    hp = Path(hills_path) if hills_path else None
+    if to_degrade and hp and hp.exists():
+        df_hills = None
+        for enc in ("utf-8-sig", "utf-8", "cp1250", "latin1"):
+            try:
+                df_hills = pd.read_csv(hp, sep=";", dtype=str, encoding=enc)
+                break
+            except Exception:
+                pass
+
+        if df_hills is not None:
+            tw_col  = next((c for c in df_hills.columns if _norm_str(c) == "tw"),  None)
+            nas_col = next((c for c in df_hills.columns if _norm_str(c) == "nas"), None)
+            kraj_col   = next((c for c in df_hills.columns if _norm_str(c) == "kraj"),  None)
+            miasto_col = next((c for c in df_hills.columns if _norm_str(c) == "miasto"), None)
+
+            changed = False
+            for kraj, miasto in to_degrade:
+                if kraj_col is None or miasto_col is None:
+                    continue
+                mask = (
+                    df_hills[kraj_col].astype(str).str.strip().str.upper().eq(kraj) &
+                    df_hills[miasto_col].astype(str).str.strip().eq(miasto)
+                )
+                if not mask.any():
+                    continue
+                parts = []
+                for ridx in df_hills[mask].index:
+                    if tw_col:
+                        old = _norm_str(df_hills.at[ridx, tw_col])
+                        new = _TW_DEGRADE.get(old)
+                        if new and new != old:
+                            parts.append(f"Tw: {old}→{new}")
+                            df_hills.at[ridx, tw_col] = new
+                            changed = True
+                    if nas_col:
+                        old = _norm_str(df_hills.at[ridx, nas_col])
+                        new = _NAS_DEGRADE.get(old)
+                        if new and new != old.upper() and new != old:
+                            parts.append(f"Naś: {old.upper()}→{new}")
+                            df_hills.at[ridx, nas_col] = new
+                            changed = True
+                if parts:
+                    messages.append(f"{kraj} / {miasto}: {', '.join(parts)}")
+
+            if changed:
+                df_hills.to_csv(hp, sep=";", index=False, encoding="utf-8")
+
+    return df, messages
+
+
 def _get_flag_image(flags_dir: Path | None, code: str):
     """
     Zwraca tk.PhotoImage z cache dla kodu kraju (np. 'AUT').
@@ -2050,29 +2221,34 @@ class HillsTab(ttk.Frame):
         cbo_view.bind("<<ComboboxSelected>>", lambda e: self._render_build_costs())
 
         def _export_to_csv():
-            # Pobieramy aktualny widok z cache
             mode = view_var.get()
-            _compute_if_needed() # Upewniamy się, że dane są przeliczone
-            
-            # Wybieramy odpowiedni DataFrame na podstawie aktualnego widoku
-            export_map = {
-                "Kraje — suma": _cache["by_sum"],
-                "Kraje — rozbicie": _cache["by_break"],
-                "Kraje — suma + liczba": _cache["by_count"],
-                "Ranking": _cache["ranking"]
-            }
-            
-            df_to_save = export_map.get(mode)
-            
+            _compute_if_needed()
+
+            if mode == "Kraje — suma":
+                # Jeśli istnieje plik klasy operacyjnej, stosuj mnożniki
+                op_path = Path(getattr(self, "_op_class_path", "S45/Klasa operacyjna S45.csv"))
+                df_op = load_operational_classes(op_path)
+                df_rows_cached = _cache.get("df_rows")
+                if df_rows_cached is not None and not df_rows_cached.empty and not df_op.empty:
+                    df_to_save = apply_operational_multipliers(df_rows_cached, df_op)
+                    note = " (z klasą operacyjną)"
+                else:
+                    df_to_save = _cache["by_sum"]
+                    note = ""
+            else:
+                export_map = {
+                    "Kraje — rozbicie":       _cache["by_break"],
+                    "Kraje — suma + liczba":  _cache["by_count"],
+                    "Ranking":                _cache["ranking"],
+                }
+                df_to_save = export_map.get(mode)
+                note = ""
+
             if df_to_save is not None and not df_to_save.empty:
                 try:
-                    # Definiujemy ścieżkę zapisu (w tym samym folderze co inne pliki S45)
                     output_path = Path("S45/Utrzymanie Skoczni S45.csv")
-                    
-                    # Zapisujemy dane z kodowaniem cp1250 (standard dla Excela w PL)
                     df_to_save.to_csv(output_path, sep=";", index=False, encoding="cp1250")
-                    
-                    messagebox.showinfo("Eksport", f"Pomyślnie wyeksportowano widok '{mode}' do pliku:\n{output_path}")
+                    messagebox.showinfo("Eksport", f"Wyeksportowano{note} do:\n{output_path}")
                 except Exception as e:
                     messagebox.showerror("Błąd eksportu", f"Nie udało się zapisać pliku: {e}")
             else:
@@ -2271,7 +2447,7 @@ class HillsTab(ttk.Frame):
         table_wrap.pack(fill="both", expand=True)
 
         self._complexes_path = default_complexes
-        _cache = {"df_src": None, "by_sum": None, "by_break": None, "by_count": None, "ranking": None}
+        _cache = {"df_src": None, "df_rows": None, "by_sum": None, "by_break": None, "by_count": None, "ranking": None}
 
         def _tree_simple(parent, df_data: pd.DataFrame, cols, stretch_last=False, with_flags=False):
             # wyczyść kontener
@@ -2357,7 +2533,7 @@ class HillsTab(ttk.Frame):
 
                 df_src = build_complexes_from_hills(df_hills)
                 df_rows, by_sum, by_break, by_count, ranking = compute_complex_costs(df_src)
-                _cache.update(df_src=df_src, by_sum=by_sum, by_break=by_break, by_count=by_count, ranking=ranking)
+                _cache.update(df_src=df_src, df_rows=df_rows, by_sum=by_sum, by_break=by_break, by_count=by_count, ranking=ranking)
 
         def _render_view():
             _compute_if_needed()
@@ -2397,7 +2573,7 @@ class HillsTab(ttk.Frame):
 
         def _rebuild_costs():
             # wymuś przeliczenie od zera i odśwież render
-            _cache.update(df_src=None, by_sum=None, by_break=None, by_count=None, ranking=None)
+            _cache.update(df_src=None, df_rows=None, by_sum=None, by_break=None, by_count=None, ranking=None)
             _render_view()
             _render_complexes_tab()
 
@@ -2407,7 +2583,13 @@ class HillsTab(ttk.Frame):
         # auto-refresh „Kompleksy” na starcie
         _render_complexes_tab()
 
-        # Wewnątrz HillsTab.__init__:
+        # Klasa operacyjna skoczni
+        self._op_class_path = "S45/Klasa operacyjna S45.csv"
+        tab_op = ttk.Frame(nb, name="klasa_operacyjna")
+        nb.add(tab_op, text="Klasa operacyjna")
+        self._op_class_tab = OperationalClassTab(tab_op, hills_tab_ref=self)
+        self._op_class_tab.pack(fill="both", expand=True)
+
         # Gdy HillBuilderTab wyśle sygnał odświeżenia, wywołaj metodę odświeżającą
         self.bind("<<HILLS_COMPLEXES_REFRESH>>", lambda e: self._handle_global_refresh())
 
@@ -3522,6 +3704,241 @@ class HillsTab(ttk.Frame):
             pass
 
         messagebox.showinfo("Infrastruktura", f"Zapisano zmiany do pliku:\n{path}")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+class OperationalClassTab(ttk.Frame):
+    """Zakładka: Klasa operacyjna skoczni (wybór per kompleks + degradacja)."""
+
+    def __init__(self, parent, hills_tab_ref):
+        super().__init__(parent)
+        self._ht = hills_tab_ref
+        self._data: dict = {}         # (Kraj, Miasto) → {"Klasa": str, "Sezony_MIN": int}
+        self._full_costs: dict = {}   # (Kraj, Miasto) → int
+        self._fis_classes: dict = {}  # (Kraj, Miasto) → str
+        self._build_ui()
+
+    # ── UI ───────────────────────────────────────────────────────────────────
+
+    def _build_ui(self):
+        # Pasek ścieżki
+        top = ttk.Frame(self)
+        top.pack(fill="x", padx=8, pady=(8, 4))
+        ttk.Label(top, text="Plik klasy operacyjnej:").pack(side="left")
+        self._path_var = tk.StringVar(value="S45/Klasa operacyjna S45.csv")
+        ttk.Entry(top, textvariable=self._path_var, width=42).pack(side="left", padx=4, fill="x", expand=True)
+        ttk.Button(top, text="Wybierz…", command=self._pick_file).pack(side="left")
+        ttk.Button(top, text="Załaduj", command=self.refresh).pack(side="left", padx=(4, 0))
+
+        # Pasek akcji
+        bar = ttk.Frame(self)
+        bar.pack(fill="x", padx=8, pady=4)
+        ttk.Label(bar, text="Ustaw zaznaczone na:").pack(side="left")
+        self._bulk_cb = ttk.Combobox(bar, values=_OP_CHOICES, state="readonly", width=11)
+        self._bulk_cb.set("Pełna")
+        self._bulk_cb.pack(side="left", padx=4)
+        ttk.Button(bar, text="Zastosuj", command=self._bulk_apply).pack(side="left")
+        ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", padx=10)
+        ttk.Button(bar, text="Przelicz", command=self.refresh).pack(side="left")
+        ttk.Button(bar, text="Zapisz", command=self._save).pack(side="left", padx=4)
+        ttk.Button(bar, text="Zakończ sezon →", command=self._season_end).pack(side="left", padx=(8, 0))
+
+        # Tabela
+        wrap = ttk.Frame(self)
+        wrap.pack(fill="both", expand=True, padx=8, pady=(0, 4))
+        cols = ["Miasto", "Klasa FIS", "Klasa op.", "Sezony MIN", "Koszt pełny €", "Koszt efektywny €"]
+        self._tv = ttk.Treeview(wrap, columns=cols, show="tree headings", height=16, selectmode="extended")
+        vsb = ttk.Scrollbar(wrap, orient="vertical",   command=self._tv.yview)
+        hsb = ttk.Scrollbar(wrap, orient="horizontal", command=self._tv.xview)
+        self._tv.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self._tv.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        hsb.grid(row=1, column=0, sticky="ew")
+        wrap.rowconfigure(0, weight=1)
+        wrap.columnconfigure(0, weight=1)
+
+        self._tv.heading("#0", text="Kraj")
+        self._tv.column("#0", width=100, anchor="w")
+        widths = {"Miasto": 120, "Klasa FIS": 175, "Klasa op.": 95,
+                  "Sezony MIN": 80, "Koszt pełny €": 120, "Koszt efektywny €": 130}
+        for c in cols:
+            self._tv.heading(c, text=c)
+            self._tv.column(c, width=widths.get(c, 100), anchor="center")
+
+        self._tv.tag_configure("min", foreground="#cc3300")
+        self._tv.tag_configure("coc", foreground="#886600")
+        self._tv.tag_configure("warn", background="#fff3cd")  # żółte ostrzeżenie (Sezony_MIN == 2)
+
+        # Podsumowanie
+        self._summary_var = tk.StringVar(value="")
+        ttk.Label(self, textvariable=self._summary_var, anchor="w",
+                  font=("TkDefaultFont", 9)).pack(fill="x", padx=8, pady=(0, 8))
+
+        self.refresh()
+
+    # ── Dane ─────────────────────────────────────────────────────────────────
+
+    def _get_complexes(self) -> pd.DataFrame:
+        try:
+            df_h = getattr(self._ht.hills_viewer, "df", None) or getattr(self._ht.hills_viewer, "_df", None)
+            return build_complexes_from_hills(df_h)
+        except Exception:
+            return pd.DataFrame()
+
+    def refresh(self):
+        df_c = self._get_complexes()
+        if df_c.empty:
+            self._summary_var.set("Brak danych — wczytaj plik Skocznie w zakładce 'Skocznie'.")
+            return
+
+        df_rows, _, _, _, _ = compute_complex_costs(df_c)
+
+        # Uzupełnij _full_costs i _fis_classes
+        for _, r in df_rows.iterrows():
+            key = (str(r.get("Kraj", "")).strip().upper(), str(r.get("Miasto", "")).strip())
+            self._full_costs[key] = int(pd.to_numeric(r.get("Suma", 0), errors="coerce") or 0)
+
+        for _, r in df_c.iterrows():
+            key = (str(r.get("Kraj", "")).strip().upper(), str(r.get("Miasto", "")).strip())
+            self._fis_classes[key] = _compute_current_fis_class(r)
+
+        # Wczytaj istniejące klasy operacyjne
+        op_path = Path(self._path_var.get().strip())
+        df_op = load_operational_classes(op_path)
+        for _, r in df_op.iterrows():
+            key = (str(r.get("Kraj", "")).strip().upper(), str(r.get("Miasto", "")).strip())
+            self._data.setdefault(key, {"Klasa": "Pełna", "Sezony_MIN": 0})
+            self._data[key]["Klasa"] = str(r.get("Klasa", "Pełna")).strip()
+            self._data[key]["Sezony_MIN"] = int(
+                pd.to_numeric(r.get("Sezony_MIN", 0), errors="coerce") or 0)
+
+        self._render(df_rows)
+
+    def _render(self, df_rows: pd.DataFrame):
+        self._tv.delete(*self._tv.get_children())
+        total_full = 0
+        total_eff  = 0
+
+        for _, r in df_rows.iterrows():
+            kraj   = str(r.get("Kraj", "")).strip().upper()
+            miasto = str(r.get("Miasto", "")).strip()
+            key    = (kraj, miasto)
+
+            entry     = self._data.get(key, {"Klasa": "Pełna", "Sezony_MIN": 0})
+            klasa_op  = entry.get("Klasa", "Pełna")
+            sezony    = entry.get("Sezony_MIN", 0)
+            full_cost = self._full_costs.get(key, 0)
+            eff_cost  = int(full_cost * _OP_MULTIPLIERS.get(klasa_op, 1.0))
+            fis_cls   = self._fis_classes.get(key, "—")
+
+            total_full += full_cost
+            total_eff  += eff_cost
+
+            tags = []
+            if klasa_op == "Minimalna":
+                tags.append("min")
+            elif klasa_op == "COC":
+                tags.append("coc")
+            if sezony == 2:
+                tags.append("warn")
+
+            self._tv.insert("", "end", iid=f"{kraj}|{miasto}", text=kraj,
+                values=[miasto, fis_cls, klasa_op, sezony,
+                        f"{full_cost:,}".replace(",", " "),
+                        f"{eff_cost:,}".replace(",", " ")],
+                tags=tuple(tags))
+
+        savings = total_full - total_eff
+        self._summary_var.set(
+            f"Koszt pełny: {total_full:,} €   •   Koszt efektywny: {total_eff:,} €"
+            f"   •   Oszczędność: {savings:,} €".replace(",", " ")
+        )
+
+    # ── Akcje ────────────────────────────────────────────────────────────────
+
+    def _bulk_apply(self):
+        selected = self._tv.selection()
+        if not selected:
+            messagebox.showwarning("Brak wyboru", "Zaznacz wiersze w tabeli.", parent=self)
+            return
+        new_klasa = self._bulk_cb.get()
+        for iid in selected:
+            parts = iid.split("|", 1)
+            if len(parts) == 2:
+                key = (parts[0], parts[1])
+                self._data.setdefault(key, {"Sezony_MIN": 0})
+                self._data[key]["Klasa"] = new_klasa
+        df_c = self._get_complexes()
+        if not df_c.empty:
+            df_rows, *_ = compute_complex_costs(df_c)
+            self._render(df_rows)
+
+    def _save(self):
+        rows = [
+            {"Kraj": k[0], "Miasto": k[1],
+             "Klasa": v.get("Klasa", "Pełna"), "Sezony_MIN": v.get("Sezony_MIN", 0)}
+            for k, v in self._data.items()
+        ]
+        df = pd.DataFrame(rows, columns=["Kraj", "Miasto", "Klasa", "Sezony_MIN"])
+        op_path = self._path_var.get().strip()
+        save_operational_classes(df, op_path)
+        self._ht._op_class_path = op_path
+        messagebox.showinfo("Zapisano", f"Klasy operacyjne zapisane do:\n{op_path}", parent=self)
+
+    def _season_end(self):
+        if not messagebox.askyesno(
+            "Zakończ sezon",
+            "Przetworzyć koniec sezonu?\n"
+            "• Sezony_MIN zostanie zaktualizowane\n"
+            "• Kompleksy z 3+ sezonami na Minimalnej: degradacja Tw i Naś w pliku Skocznie",
+            parent=self
+        ):
+            return
+
+        rows = [
+            {"Kraj": k[0], "Miasto": k[1],
+             "Klasa": v.get("Klasa", "Pełna"), "Sezony_MIN": v.get("Sezony_MIN", 0)}
+            for k, v in self._data.items()
+        ]
+        df_op = pd.DataFrame(rows, columns=["Kraj", "Miasto", "Klasa", "Sezony_MIN"])
+
+        hills_path_str = getattr(self._ht.hills_viewer, "var_path", tk.StringVar()).get().strip()
+        df_op_new, messages = apply_season_end_degradation(df_op, hills_path_str)
+
+        # Zaktualizuj _data
+        for _, r in df_op_new.iterrows():
+            key = (str(r["Kraj"]).strip().upper(), str(r["Miasto"]).strip())
+            self._data.setdefault(key, {"Klasa": "Pełna"})
+            self._data[key]["Sezony_MIN"] = int(r["Sezony_MIN"])
+
+        op_path = self._path_var.get().strip()
+        save_operational_classes(df_op_new, op_path)
+        self._ht._op_class_path = op_path
+
+        if messages:
+            msg = "Degradacje w tym sezonie:\n" + "\n".join(f"  • {m}" for m in messages)
+            msg += "\n\nPlik Skocznie zaktualizowany. Odśwież zakładkę Skocznie, by zobaczyć zmiany."
+        else:
+            msg = "Brak degradacji w tym sezonie.\nKlasy operacyjne i liczniki zaktualizowane."
+        messagebox.showinfo("Zakończono sezon", msg, parent=self)
+
+        df_c = self._get_complexes()
+        if not df_c.empty:
+            for _, r in df_c.iterrows():
+                key = (str(r.get("Kraj", "")).strip().upper(), str(r.get("Miasto", "")).strip())
+                self._fis_classes[key] = _compute_current_fis_class(r)
+            df_rows, *_ = compute_complex_costs(df_c)
+            self._render(df_rows)
+
+    def _pick_file(self):
+        p = filedialog.askopenfilename(
+            title="Wybierz plik klasy operacyjnej",
+            filetypes=[("CSV", "*.csv"), ("Wszystkie", "*.*")],
+            parent=self
+        )
+        if p:
+            self._path_var.set(p)
+
 
 class HillBuilderTab(ttk.Frame):
     """Zakładka: Budowa skoczni — formularz dodający nową skocznię do Skocznie S45.csv"""
