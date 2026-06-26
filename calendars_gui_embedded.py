@@ -102,8 +102,8 @@ _CYCLE_MIN_FIS: dict[str, str] = {
     "NKIC": "OLYMPIC CLASS",
     "IST":  "OLYMPIC CLASS",
     "WC":   "WORLD CUP CLASS",
-    "GP":   "WORLD CUP CLASS",   # + wymagany igielit
-    "SCOC": "WORLD CUP CLASS",   # + wymagany igielit
+    "GP":   "CONTINENTAL CUP CLASS",  # + wymagany igielit
+    "SCOC": "JUNIOR CUP CLASS",       # + wymagany igielit
     "COC":  "CONTINENTAL CUP CLASS",
     "YOG":  "CONTINENTAL CUP CLASS",
     "UNI":  "CONTINENTAL CUP CLASS",
