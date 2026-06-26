@@ -18,6 +18,7 @@ Użycie:
 from __future__ import annotations
 
 from pathlib import Path
+import math
 import re
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
@@ -335,6 +336,114 @@ def apply_season_end_degradation(df_op: pd.DataFrame, hills_path) -> tuple:
                 df_hills.to_csv(hp, sep=";", index=False, encoding="utf-8")
 
     return df, messages
+
+
+def _load_nations_for_cycle(search_dir: Path, prev_s: str, cycle: str, suf: str) -> list:
+    """Wczytuje listę NAT z pliku klasyfikacji w kolejności rankingowej."""
+    names = [
+        f"{prev_s}_{cycle}-{suf}__nations.csv",
+        f"{prev_s}_{cycle}_{suf}__nations.csv",
+        f"{cycle}-{suf}__nations.csv",
+        f"{cycle}_{suf}__nations.csv",
+    ]
+    for name in names:
+        p = Path(search_dir) / name
+        if p.exists():
+            for enc in ("utf-8-sig", "utf-8", "cp1250"):
+                try:
+                    df = pd.read_csv(p, sep=None, engine="python", encoding=enc)
+                    df.columns = [str(c).strip().upper() for c in df.columns]
+                    c_nat = next((c for c in ("NAT", "KRAJ", "NATION") if c in df.columns), None)
+                    if c_nat:
+                        return df[c_nat].dropna().map(lambda x: str(x).strip()).unique().tolist()
+                except Exception:
+                    pass
+    return []
+
+
+def _compute_slot_lim(rank: int, cycle: str, gender: str) -> int:
+    """Zwraca liczbę slotów eventów dla danego miejsca i cyklu (ta sama logika co w SeasonPlannerFrame)."""
+    if cycle == "WC":
+        if gender == "M":
+            if rank == 1: return 5
+            if rank <= 5: return 4
+            if rank <= 14: return 2
+        else:
+            if rank <= 4: return 4
+            if rank == 5: return 3
+            if rank <= 14: return 2
+        return 0
+    if cycle == "COC":
+        top = 3 if gender == "M" else 2
+        if rank <= top: return 4
+        if rank <= 15: return 2
+        return 0
+    if cycle == "FC":
+        cutoff = 15 if gender == "M" else 14
+        return 2 if rank <= cutoff else 0
+    # JC, MC, PC, QC, TC, AC, BC, DC
+    return 2 if rank <= 5 else 0
+
+
+def _build_interleaved_ranking(m_list: list, w_list: list) -> list:
+    """Splata ranking M i W naprzemiennie (jak w GP/SCOC), usuwa duplikaty."""
+    combined = []
+    for m, w in zip(m_list, w_list):
+        combined.extend([m, w])
+    longer = m_list if len(m_list) > len(w_list) else w_list
+    combined.extend(longer[min(len(m_list), len(w_list)):])
+    seen: set = set()
+    return [x for x in combined if not (x in seen or seen.add(x))]
+
+
+def compute_op_class_demands(search_dir, prev_s: str) -> tuple:
+    """
+    Oblicza zapotrzebowanie na skocznie per kraj z klasyfikacji poprzedniego sezonu.
+    Zwraca (country_demand, wc_demand):
+      country_demand: {NAT: suma floor(lim/2)} bez bonusu juniorskiego
+      wc_demand:      {NAT: demand tylko z WC-M + WC-W}
+    """
+    country_demand: dict = {}
+    wc_demand: dict = {}
+
+    def _add(nat: str, d: int, to_wc: bool = False):
+        if d <= 0:
+            return
+        nat = nat.strip().upper()
+        country_demand[nat] = country_demand.get(nat, 0) + d
+        if to_wc:
+            wc_demand[nat] = wc_demand.get(nat, 0) + d
+
+    # WC, COC, FC – osobno M i W
+    for cycle in ("WC", "COC", "FC"):
+        for suf in ("M", "W"):
+            for i, nat in enumerate(_load_nations_for_cycle(search_dir, prev_s, cycle, suf)):
+                lim = _compute_slot_lim(i + 1, cycle, suf)
+                _add(nat, lim // 2, to_wc=(cycle == "WC"))
+
+    # GP – interleaved M+W, top 5 dostaje lim=2 → demand=1
+    gp = _build_interleaved_ranking(
+        _load_nations_for_cycle(search_dir, prev_s, "GP", "M"),
+        _load_nations_for_cycle(search_dir, prev_s, "GP", "W"),
+    )
+    for i, nat in enumerate(gp):
+        if i < 5: _add(nat, 1)
+
+    # SCOC – interleaved M+W, top 3 dostaje lim=2 → demand=1
+    scoc = _build_interleaved_ranking(
+        _load_nations_for_cycle(search_dir, prev_s, "SCOC", "M"),
+        _load_nations_for_cycle(search_dir, prev_s, "SCOC", "W"),
+    )
+    for i, nat in enumerate(scoc):
+        if i < 3: _add(nat, 1)
+
+    # Juniorskie (JC, MC, PC, QC, TC, AC, BC, DC) – osobno M i W, top 5 → demand=1
+    for cycle in ("JC", "MC", "PC", "QC", "TC", "AC", "BC", "DC"):
+        for suf in ("M", "W"):
+            for i, nat in enumerate(_load_nations_for_cycle(search_dir, prev_s, cycle, suf)):
+                if i < 5: _add(nat, 1)
+
+    return country_demand, wc_demand
 
 
 def _get_flag_image(flags_dir: Path | None, code: str):
@@ -3887,6 +3996,7 @@ class OperationalClassTab(ttk.Frame):
         ttk.Button(bar, text="Zastosuj", command=self._bulk_apply).pack(side="left")
         ttk.Separator(bar, orient="vertical").pack(side="left", fill="y", padx=10)
         ttk.Button(bar, text="Przelicz", command=self.refresh).pack(side="left")
+        ttk.Button(bar, text="Auto z klasyfikacji", command=self._auto_op_classes).pack(side="left", padx=4)
         ttk.Button(bar, text="Zapisz", command=self._save).pack(side="left", padx=4)
         ttk.Button(bar, text="Zakończ sezon →", command=self._season_end).pack(side="left", padx=(8, 0))
 
@@ -4090,6 +4200,83 @@ class OperationalClassTab(ttk.Frame):
                 self._fis_classes[key] = _compute_current_fis_class(r)
             df_rows, *_ = compute_complex_costs(df_c)
             self._render(df_rows)
+
+    def _auto_op_classes(self):
+        """Auto-przelicza klasy operacyjne z klasyfikacji poprzedniego sezonu."""
+        # Ustal numer sezonu z ścieżki pliku klasy operacyjnej
+        op_path_str = self._path_var.get().strip()
+        m = re.search(r'S(\d+)', op_path_str, re.IGNORECASE)
+        if not m:
+            messagebox.showerror("Błąd", "Nie można ustalić numeru sezonu ze ścieżki pliku.", parent=self)
+            return
+        cur_s_num = int(m.group(1))
+        prev_s_num = cur_s_num - 1
+        prev_s = f"S{prev_s_num}"
+
+        # Szukaj katalogu klasyfikacji poprzedniego sezonu
+        search_dirs = [
+            Path(f"{prev_s}/Klasyfikacje {prev_s}"),
+            Path(op_path_str).parent.parent / prev_s / f"Klasyfikacje {prev_s}",
+        ]
+        search_dir = next((d for d in search_dirs if d.exists()), search_dirs[0])
+
+        # Wczytaj kompleksy skoczni
+        df_c = self._get_complexes()
+        if df_c.empty:
+            messagebox.showerror("Błąd", "Brak danych skoczni. Wczytaj plik Skocznie.", parent=self)
+            return
+
+        # Oblicz demand per kraj
+        country_demand, wc_demand = compute_op_class_demands(search_dir, prev_s)
+        if not country_demand:
+            messagebox.showwarning(
+                "Brak danych klasyfikacji",
+                f"Nie znaleziono plików klasyfikacji w:\n{search_dir.resolve()}\n\n"
+                "Sprawdź czy folder z klasyfikacjami poprzedniego sezonu istnieje.",
+                parent=self
+            )
+            return
+
+        # Zgrupuj skocznie per kraj, posortowane malejąco po pojemności
+        country_hills: dict = {}
+        for _, r in df_c.iterrows():
+            nat = str(r.get("Kraj", "")).strip().upper()
+            miasto = str(r.get("Miasto", "")).strip()
+            poj = int(pd.to_numeric(r.get("Miejsca dla kibicow", 0), errors="coerce") or 0)
+            country_hills.setdefault(nat, []).append((miasto, poj))
+        for nat in country_hills:
+            country_hills[nat].sort(key=lambda x: x[1], reverse=True)
+
+        # Przypisz klasy per kraj
+        changed = 0
+        for nat, hills in country_hills.items():
+            demand = country_demand.get(nat, 0) + 1   # +1 slot juniorski
+            total_active = min(math.ceil(demand / 2), len(hills))
+            wc_d = wc_demand.get(nat, 0)
+            pełna_n = min(wc_d, total_active)
+            poł_n = total_active - pełna_n
+            for i, (miasto, _) in enumerate(hills):
+                key = (nat, miasto)
+                self._data.setdefault(key, {"Klasa": "Pełna", "Sezony_POL": 0, "Sezony_MIN": 0})
+                if i < pełna_n:
+                    klasa = "Pełna"
+                elif i < pełna_n + poł_n:
+                    klasa = "Połowiczna"
+                else:
+                    klasa = "Minimalna"
+                self._data[key]["Klasa"] = klasa
+                changed += 1
+
+        # Odśwież tabele
+        df_rows, *_ = compute_complex_costs(df_c)
+        self._render(df_rows)
+        messagebox.showinfo(
+            "Auto-przeliczanie gotowe",
+            f"Przeliczono klasy dla {len(country_hills)} krajów ({changed} kompleksów).\n"
+            f"Dane z klasyfikacji: {prev_s}\n\n"
+            "Kliknij 'Zapisz', żeby utrwalić zmiany.",
+            parent=self
+        )
 
     def _pick_file(self):
         p = filedialog.askopenfilename(
