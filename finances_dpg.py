@@ -10,8 +10,8 @@ from pathlib import Path
 # KONFIGURACJA
 # ---------------------------------------------------------------------------
 DEFAULT_CANDIDATES = [
-    Path("./S45/Finanse S45.csv"),
-    Path("Finanse S45.csv"),
+    Path("./S51/Finanse S51.csv"),
+    Path("Finanse S51.csv"),
 ]
 
 SEP_COLS = {1, 3, 7, 10, 12, 14, 16, 19, 21, 23, 24, 26}  # separatory grup kolumn
@@ -810,7 +810,7 @@ def cb_budget(sender, app_data):
     try:
         fin_path = get_fin_path()
         match = re.search(r'S(\d+)', fin_path.name)
-        s_val = f"S{match.group(1)}" if match else "S45"
+        s_val = f"S{match.group(1)}" if match else "S51"
         base_dir = Path(f"./{s_val}")
         file_m = base_dir / f"Ranking FIS M {s_val}.csv"
         file_w = base_dir / f"Ranking FIS W {s_val}.csv"
@@ -866,13 +866,13 @@ def cb_new_season_confirm(sender, app_data):
     try:
         liczby = re.findall(r'\d+', nowy_sezon)
         if not liczby:
-            show_error("Błąd", "Nazwa musi zawierać numer (np. S45)"); return
+            show_error("Błąd", "Nazwa musi zawierać numer (np. S51)"); return
         numer_nowego = int(liczby[0])
         numer_starego = numer_nowego - 1
         stary_sezon = f"S{numer_starego}"
         sciezka_stara = os.path.join(stary_sezon, f"Finanse {stary_sezon}.csv")
         if not os.path.exists(sciezka_stara) and numer_starego == 38:
-            sciezka_stara = "Finanse S45.csv"
+            sciezka_stara = "Finanse S51.csv"
         if not os.path.exists(sciezka_stara):
             show_error("Błąd", f"Nie znaleziono: {sciezka_stara}"); return
 
@@ -995,7 +995,7 @@ def build_ui():
     # --- Popup: nowy sezon ---
     with dpg.window(label="Nowy Sezon", tag="popup_new_season", show=False, modal=True,
                     width=340, height=130, pos=[530, 385], no_resize=True):
-        dpg.add_text("Podaj nazwę nowego sezonu (np. S45):")
+        dpg.add_text("Podaj nazwę nowego sezonu (np. S51):")
         dpg.add_input_text(tag="input_new_season", default_value="", width=200)
         dpg.add_spacer(height=6)
         with dpg.group(horizontal=True):

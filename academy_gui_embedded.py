@@ -14,10 +14,10 @@ Standardowy entrypoint dla combined:
     build_academies_root(parent)  → AcademyRootFrame
 
 Pliki domyślne (względem katalogu z tym plikiem):
-- S45/Akademia M S45.csv
-- S45/Akademia W S45.csv
-- S45/Sztab M S45.csv
-- S45/Sztab W S45.csv
+- S51/Akademia M S51.csv
+- S51/Akademia W S51.csv
+- S51/Sztab M S51.csv
+- S51/Sztab W S51.csv
 
 Flagi: ./flags/XXX.png (18x11)
 """
@@ -41,10 +41,10 @@ APP_DIR = Path(__file__).resolve().parent
 FLAGS_DIR = APP_DIR / "flags"
 
 # Pliki logujące wyciągniętych / zwolnionych z Akademii
-EXTRACTED_M_PATH = APP_DIR / "S45/Akademia Wyciągnięci M S45.csv"
-EXTRACTED_W_PATH = APP_DIR / "S45/Akademia Wyciągnięci W S45.csv"
-FIRED_M_PATH     = APP_DIR / "S45/Akademia Zwolnieni M S45.csv"
-FIRED_W_PATH     = APP_DIR / "S45/Akademia Zwolnieni W S45.csv"
+EXTRACTED_M_PATH = APP_DIR / "S51/Akademia Wyciągnięci M S51.csv"
+EXTRACTED_W_PATH = APP_DIR / "S51/Akademia Wyciągnięci W S51.csv"
+FIRED_M_PATH     = APP_DIR / "S51/Akademia Zwolnieni M S51.csv"
+FIRED_W_PATH     = APP_DIR / "S51/Akademia Zwolnieni W S51.csv"
 
 kks = pykakasi.kakasi()
 
@@ -513,15 +513,15 @@ class AcademyFrame(ttk.Frame):
     """
     Zakładka z listą zawodników Akademii.
     Dwie podzakładki: MEN / WOMEN, dane z:
-    - S45/Akademia M S45.csv
-    - S45/Akademia W S45.csv
+    - S51/Akademia M S51.csv
+    - S51/Akademia W S51.csv
     """
 
     def __init__(
         self,
         parent,
-        men_path: Path | str = APP_DIR / "S45/Akademia M S45.csv",
-        women_path: Path | str = APP_DIR / "S45/Akademia W S45.csv",
+        men_path: Path | str = APP_DIR / "S51/Akademia M S51.csv",
+        women_path: Path | str = APP_DIR / "S51/Akademia W S51.csv",
         flags_dir: Path | str = FLAGS_DIR,
     ):
         super().__init__(parent)
@@ -686,8 +686,8 @@ class AcademyFrame(ttk.Frame):
         """
         Zwraca mapę {NAT: UM trenera juniorów} dla danej płci.
         Szuka w plikach:
-            S45/Sztab M S45.csv  (MEN)
-            S45/Sztab W S45.csv  (WOMEN)
+            S51/Sztab M S51.csv  (MEN)
+            S51/Sztab W S51.csv  (WOMEN)
 
         Filtrowanie po kodzie 'TJ' albo nazwie zawierającej 'trener junior'.
         Jeśli nic nie znajdzie – zwraca pusty dict i zawodnicy rosną tylko z RNG.
@@ -695,7 +695,7 @@ class AcademyFrame(ttk.Frame):
         import pandas as pd
 
         sex = "M" if tag == "MEN" else "W"
-        staff_path = APP_DIR / "S45" / f"Sztab {sex} S45.csv"
+        staff_path = APP_DIR / "S51" / f"Sztab {sex} S51.csv"
 
         if not staff_path.exists():
             return {}
@@ -1090,10 +1090,10 @@ class AcademySummaryFrame(ttk.Frame):
     def __init__(
         self,
         parent,
-        academy_m_path: Path | str = APP_DIR / "S45/Akademia M S45.csv",
-        academy_w_path: Path | str = APP_DIR / "S45/Akademia W S45.csv",
-        staff_m_path: Path | str = APP_DIR / "S45/Sztab M S45.csv",
-        staff_w_path: Path | str = APP_DIR / "S45/Sztab W S45.csv",
+        academy_m_path: Path | str = APP_DIR / "S51/Akademia M S51.csv",
+        academy_w_path: Path | str = APP_DIR / "S51/Akademia W S51.csv",
+        staff_m_path: Path | str = APP_DIR / "S51/Sztab M S51.csv",
+        staff_w_path: Path | str = APP_DIR / "S51/Sztab W S51.csv",
         flags_dir: Path | str = FLAGS_DIR,
     ):
         super().__init__(parent)
@@ -2006,10 +2006,10 @@ class AcademyRootFrame(ttk.Frame):
 
         import re
         match = re.search(r"S\d+", source_path.name)
-        season = match.group(0) if match else "S45" # fallback na S45
+        season = match.group(0) if match else "S51" # fallback na S51
         
-        # Zakładamy, że baza główna jest w tym samym folderze co logi (S45)
-        target_path = APP_DIR / "S45" / f"Zawodnicy {season}gpt.csv"
+        # Zakładamy, że baza główna jest w tym samym folderze co logi (S51)
+        target_path = APP_DIR / "S51" / f"Zawodnicy {season}gpt.csv"
         
         try:
             # 2. Wczytanie wyciągniętych juniorów (Średnik, cp1250)

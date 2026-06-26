@@ -966,10 +966,10 @@ class SportsApp(QMainWindow):
     # ---------------------------------------------------------
 
     def _ask_season(self):
-        """Pokazuje okienko do wpisania sezonu. Zwraca np. 'S45' lub None."""
+        """Pokazuje okienko do wpisania sezonu. Zwraca np. 'S51' lub None."""
         text, ok = QInputDialog.getText(
             self, "Podaj sezon",
-            "Wpisz numer sezonu (np. S45):",
+            "Wpisz numer sezonu (np. S51):",
         )
         if ok and text.strip():
             return text.strip()
@@ -1076,8 +1076,8 @@ class SportsApp(QMainWindow):
         msg.exec()
 
     # ---------------------------------------------------------
-    # CYKLE  (np. S45_WC-M__players.csv  →  WC_IND_M.csv)
-    #         (np. S45_WC-M__nations.csv →  WC_TEAM_M.csv)
+    # CYKLE  (np. S51_WC-M__players.csv  →  WC_IND_M.csv)
+    #         (np. S51_WC-M__nations.csv →  WC_TEAM_M.csv)
     # ---------------------------------------------------------
     #
     # Mapowanie: prefix_file_suffix → dest_file
@@ -1126,7 +1126,7 @@ class SportsApp(QMainWindow):
         season = self._ask_season()
         if not season:
             return
-        # Wyciągamy numer sezonu (np. "S45" → 38, "38" → 38)
+        # Wyciągamy numer sezonu (np. "S51" → 38, "38" → 38)
         season_num = season.lstrip('Ss')
 
         folder = self._season_folder(season)
@@ -1194,7 +1194,7 @@ class SportsApp(QMainWindow):
         self._show_result(f"Cykle – {season}", results)
 
     # ---------------------------------------------------------
-    # TURNIEJE  (np. S45_TCS.csv  →  WCM_TCS.csv)
+    # TURNIEJE  (np. S51_TCS.csv  →  WCM_TCS.csv)
     #
     # Kolumny źródłowe:  LP. | JUMPER | NAT | K1 | K2 | ... | Overall
     # Format docelowy:   sezon;msc;zawodnik;nat;overall
@@ -1416,7 +1416,7 @@ class SportsApp(QMainWindow):
     # ---------------------------------------------------------
     # TEAM (FIXED_CC, FIXED_MSC_M, FIXED_MSC_W, FIXED_NTC)
     #
-    # Pliki źródłowe:  S45_CC.csv, S45_MSC_M.csv, itd.
+    # Pliki źródłowe:  S51_CC.csv, S51_MSC_M.csv, itd.
     # Format FIXED_CC / FIXED_MSC:  sezon;msc;kraj;nat
     # Format FIXED_NTC:             sezon;W/F/SF;kraj;nat
     # ---------------------------------------------------------

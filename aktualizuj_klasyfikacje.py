@@ -19,7 +19,7 @@ Inicjalizacja tabel (wywołaj raz przy starcie aplikacji lub wbuduj w GUI):
     from aktualizuj_klasyfikacje import init_nowe_tabele
     init_nowe_tabele(
         db_path="manager_skokow.db",
-        skocznie_csv="Skocznie_S45.csv",
+        skocznie_csv="Skocznie_S51.csv",
         nations_csv="ALL_NATIONS.csv",
     )
 """
@@ -120,12 +120,12 @@ def _count_records(cur, table: str) -> int:
 
 def init_nowe_tabele(
     db_path: str = "manager_skokow.db",
-    skocznie_csv: str = "Skocznie_S45.csv",
+    skocznie_csv: str = "Skocznie_S51.csv",
     nations_csv: str  = "ALL_NATIONS.csv",
 ):
     """
     Tworzy nowe tabele jesli nie istnieja i wypelnia:
-      - skocznie         (z Skocznie_S45.csv)
+      - skocznie         (z Skocznie_S51.csv)
       - rekordy_krajowe  (z ALL_NATIONS.csv)
     Pozostale tabele tworzy jako puste (wypelniane w trakcie aktualizacji).
     Bezpieczne do wielokrotnego wywolania (CREATE TABLE IF NOT EXISTS).

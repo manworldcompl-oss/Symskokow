@@ -273,8 +273,8 @@ def get_champ_prize_config(champ_code):
     else:
         return PRIZES_OG,0,30000
 
-BASE_DIR_TOURNAMENTS = Path("./S45/Klasyfikacje S45")
-BASE_DIR_CHAMPIONSHIPS = Path("./S45/Mistrzostwa S45")
+BASE_DIR_TOURNAMENTS = Path("./S51/Klasyfikacje S51")
+BASE_DIR_CHAMPIONSHIPS = Path("./S51/Mistrzostwa S51")
 
 # --- POMOCNICZE ---
 
@@ -388,8 +388,8 @@ class TournamentTab(MultiTableTab):
         for w in self.tables_frame.winfo_children(): w.destroy()
         # 1. Dane podstawowe
         suffix = f"{self.tour_code}-{self.gender}"
-        df_p = load_csv(BASE_DIR_TOURNAMENTS / f"S45_{suffix}__players.csv")
-        df_n = load_csv(BASE_DIR_TOURNAMENTS / f"S45_{suffix}__nations.csv")
+        df_p = load_csv(BASE_DIR_TOURNAMENTS / f"S51_{suffix}__players.csv")
+        df_n = load_csv(BASE_DIR_TOURNAMENTS / f"S51_{suffix}__nations.csv")
         p_gen, d_gen, p_nat, d_nat, p_wins = get_tour_prize_config(self.tour_code)
 
         # Mapy do zbierania sum dla 3 tabeli
@@ -412,12 +412,12 @@ class TournamentTab(MultiTableTab):
                 tour_list = ["TCS", "NT", "FT", "P7", "W5", "RA"] if self.gender == "M" else ["RA", "BB"]
                 # Mapowanie kodu kolumny -> rzeczywista nazwa pliku CSV
                 file_map = {
-                    "RA": "S45_RAWAIR-W.csv" if self.gender == "W" else "S45_RAWAIR-M.csv",
-                    "P7": "S45_PLANICA7.csv",
-                    "W5": "S45_WILLINGEN5.csv",
+                    "RA": "S51_RAWAIR-W.csv" if self.gender == "W" else "S51_RAWAIR-M.csv",
+                    "P7": "S51_PLANICA7.csv",
+                    "W5": "S51_WILLINGEN5.csv",
                 }
                 for st in tour_list:
-                    fname = file_map.get(st, f"S45_{st}.csv")
+                    fname = file_map.get(st, f"S51_{st}.csv")
                     sub_df = load_csv(BASE_DIR_TOURNAMENTS / fname)
                     if sub_df is not None:
                         sub_maps[st] = dict(zip(sub_df.iloc[:, 1].str.strip(), sub_df.iloc[:, 0]))
@@ -513,8 +513,8 @@ class ChampionshipTab(MultiTableTab):
             widget.destroy()
 
         reg_s = f"_{self.region}" if self.region else ""
-        pref = f"S45_{self.code}{reg_s}_{self.gender}"
-        pref_x = f"S45_{self.code}{reg_s}_X"
+        pref = f"S51_{self.code}{reg_s}_{self.gender}"
+        pref_x = f"S51_{self.code}{reg_s}_X"
         
         p_dict, b_ind, b_team = get_champ_prize_config(self.code)
         
@@ -670,7 +670,7 @@ class SummaryTab(MultiTableTab):
             p_gen, d_gen, p_nat, d_nat, p_wins = get_tour_prize_config(t)
             
             # Zawodnicy
-            df_p = load_csv(BASE_DIR_TOURNAMENTS / f"S45_{suffix}__players.csv")
+            df_p = load_csv(BASE_DIR_TOURNAMENTS / f"S51_{suffix}__players.csv")
             if df_p is not None:
                 c_idx = next((i for i, c in enumerate(df_p.columns) if str(c).upper() in ["NAT", "KRAJ"]), 2)
                 for _, row in df_p.iterrows():
@@ -686,7 +686,7 @@ class SummaryTab(MultiTableTab):
                     except: pass
 
             # Narody
-            df_n = load_csv(BASE_DIR_TOURNAMENTS / f"S45_{suffix}__nations.csv")
+            df_n = load_csv(BASE_DIR_TOURNAMENTS / f"S51_{suffix}__nations.csv")
             if df_n is not None:
                 c_idx = next((i for i, c in enumerate(df_n.columns) if str(c).upper() in ["NAT", "KRAJ"]), 2)
                 for _, row in df_n.iterrows():
@@ -717,8 +717,8 @@ class SummaryTab(MultiTableTab):
                 
                 # Pliki M/W (100% stawki) oraz MIX (50% stawki)
                 sources = [
-                    (f"S45_{c_code}{reg_s}_{self.gender}", 1.0),
-                    (f"S45_{c_code}{reg_s}_X", 0.5)
+                    (f"S51_{c_code}{reg_s}_{self.gender}", 1.0),
+                    (f"S51_{c_code}{reg_s}_X", 0.5)
                 ]
                 
                 sufs = ["_IND.csv", "_IND_NORMAL.csv", "_IND_LARGE.csv", 
@@ -761,14 +761,14 @@ class TeamTab(MultiTableTab):
 
     def load_team_data(self):
         for w in self.tables_frame.winfo_children(): w.destroy()
-        team_dir = Path("./S45/Team S45")
+        team_dir = Path("./S51/Team S51")
         if self.tour_type == "CC":
-            files = [("Continental Cup", "S45_CC_Klasyfikacja.csv")]
+            files = [("Continental Cup", "S51_CC_Klasyfikacja.csv")]
         elif self.tour_type == "SWISS":
-            files = [("Swiss Cup", "S45_SWISS_Klasyfikacja.csv")]
+            files = [("Swiss Cup", "S51_SWISS_Klasyfikacja.csv")]
         elif self.tour_type == "MSC":
-            files = [("MSC Men", "S45_MSC_M_Klasyfikacja.csv"), 
-                     ("MSC Women", "S45_MSC_W_Klasyfikacja.csv")]
+            files = [("MSC Men", "S51_MSC_M_Klasyfikacja.csv"), 
+                     ("MSC Women", "S51_MSC_W_Klasyfikacja.csv")]
         else: return
 
         for title, f_name in files:
@@ -788,13 +788,13 @@ class TeamSummaryTab(MultiTableTab):
 
     def load_summary_data(self):
         for w in self.tables_frame.winfo_children(): w.destroy()
-        team_dir = Path("./S45/Team S45")
+        team_dir = Path("./S51/Team S51")
         # Mapowanie kluczy na nazwy plików
         files_map = {
-            "CC": "S45_CC_Klasyfikacja.csv",
-            "MSC-M": "S45_MSC_M_Klasyfikacja.csv",
-            "MSC-W": "S45_MSC_W_Klasyfikacja.csv",
-            "SWISS": "S45_SWISS_Klasyfikacja.csv"
+            "CC": "S51_CC_Klasyfikacja.csv",
+            "MSC-M": "S51_MSC_M_Klasyfikacja.csv",
+            "MSC-W": "S51_MSC_W_Klasyfikacja.csv",
+            "SWISS": "S51_SWISS_Klasyfikacja.csv"
         }
         
         summary = {} # klucz: (Druzyna, Kraj)
@@ -903,7 +903,7 @@ class GrandSummaryTab(MultiTableTab):
         btn_frame = ttk.Frame(self.tables_frame)
         btn_frame.pack(fill="x", padx=10, pady=5)
         
-        export_btn = ttk.Button(btn_frame, text="EKSPORTUJ DO CSV (Nagrody S45.csv)", command=self.export_to_csv)
+        export_btn = ttk.Button(btn_frame, text="EKSPORTUJ DO CSV (Nagrody S51.csv)", command=self.export_to_csv)
         export_btn.pack(side="left")
 
         if not self.final_df.empty:
@@ -914,7 +914,7 @@ class GrandSummaryTab(MultiTableTab):
             container.pack(fill="both", expand=True)
             
             # Wywołujemy add_table, która dzięki poprawkom powyżej rozciągnie się na całość
-            self.add_table("RANKING FINANSOWY NARODÓW - SEZON S45", 
+            self.add_table("RANKING FINANSOWY NARODÓW - SEZON S51", 
                           self.final_df, 
                           ["Nation", "NAT", "SUMA", "MEN", "WOMEN", "TEAM"])
             
@@ -925,11 +925,11 @@ class GrandSummaryTab(MultiTableTab):
             
         try:
             # Tworzymy folder docelowy, jeśli nie istnieje
-            export_dir = Path("./S45")
+            export_dir = Path("./S51")
             os.makedirs(export_dir, exist_ok=True)
             
             # Pełna ścieżka do pliku
-            file_name = export_dir / "Nagrody S45.csv"
+            file_name = export_dir / "Nagrody S51.csv"
             
             # Przygotowanie danych do zapisu (wartości liczbowe do obliczeń)
             export_data = self.final_df[["Nation", "NAT", "SUMA_val", "MEN_val", "WOMEN_val", "TEAM_val"]].copy()
@@ -938,9 +938,9 @@ class GrandSummaryTab(MultiTableTab):
             # Zapis: separator średnik, kodowanie cp1250 (dla polskiego Excela)
             export_data.to_csv(file_name, sep=';', index=False, encoding='cp1250')
             
-            messagebox.showinfo("Eksport", f"Pomyślnie zapisano dane do folderu ./S45:\n{file_name.name}")
+            messagebox.showinfo("Eksport", f"Pomyślnie zapisano dane do folderu ./S51:\n{file_name.name}")
         except Exception as e:
-            messagebox.showerror("Błąd eksportu", f"Nie udało się zapisać pliku w folderze ./S45: {e}")
+            messagebox.showerror("Błąd eksportu", f"Nie udało się zapisać pliku w folderze ./S51: {e}")
 
 def build_gui(parent):
     nb_main = ttk.Notebook(parent)

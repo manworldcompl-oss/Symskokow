@@ -516,15 +516,15 @@ class KlasyfikacjeFrame(ttk.Frame):
             """
             Szuka pliku <tag>__{kind}.csv z opcjonalnym prefiksem, np.:
             - {tag}__{kind}.csv
-            - S45_{tag}__{kind}.csv
+            - S51_{tag}__{kind}.csv
             - (dowolny inny) *_<tag>__{kind}.csv
             Zwraca pełną ścieżkę lub None.
             """
             base = os.path.join(root, f"{tag}__{kind}.csv")
             if os.path.isfile(base):
                 return base
-            # typowy prefiks sezonu (np. S45_)
-            pref = os.path.join(root, f"S45_{tag}__{kind}.csv")
+            # typowy prefiks sezonu (np. S51_)
+            pref = os.path.join(root, f"S51_{tag}__{kind}.csv")
             if os.path.isfile(pref):
                 return pref
             # fallback: dowolny prefiks zakończony "_"
@@ -620,7 +620,7 @@ class KlasyfikacjeFrame(ttk.Frame):
 
     def _load_tour_df(self, tour_code: str) -> pd.DataFrame:
         """Wczytuje i normalizuje klasyfikację turnieju (TCS / FT / RAW AIR / itd.)
-        z pliku w folderze z klasyfikacjami (np. S45/Klasyfikacje S45/S45_TCS.csv)."""
+        z pliku w folderze z klasyfikacjami (np. S51/Klasyfikacje S51/S51_TCS.csv)."""
         import os, glob
         import pandas as pd
 
@@ -633,7 +633,7 @@ class KlasyfikacjeFrame(ttk.Frame):
         if not os.path.isdir(root):
             return pd.DataFrame(columns=schema)
 
-        # spróbuj zgadnąć sezon z nazwy katalogu nadrzędnego (np. S45)
+        # spróbuj zgadnąć sezon z nazwy katalogu nadrzędnego (np. S51)
         season = os.path.basename(os.path.dirname(root)) if os.path.dirname(root) else ""
 
         candidates = []

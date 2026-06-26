@@ -347,15 +347,15 @@ class Combined(tk.Tk):
             messagebox.showerror("Klasyfikacje", traceback.format_exc(), parent=self)
 
         try:
-            default_hills = APP_DIR / "S45/Skocznie S45.csv"
+            default_hills = APP_DIR / "S51/Skocznie S51.csv"
         except Exception:
             default_hills = None
 
         self.hills_tab = HillsTab(
             self.tab_hills,
-            default_hills=Path("S45/Skocznie S45.csv"),
-            default_infra=Path("S45/Infrastruktura S45.csv"),
-            default_complexes=Path("S45/Kompleksy S45.csv"),
+            default_hills=Path("S51/Skocznie S51.csv"),
+            default_infra=Path("S51/Infrastruktura S51.csv"),
+            default_complexes=Path("S51/Kompleksy S51.csv"),
             flags_dir=FLAGS_DIR,
         )
         self.hills_tab.pack(fill=tk.BOTH, expand=True)

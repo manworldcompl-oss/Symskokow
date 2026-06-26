@@ -4,7 +4,7 @@
 Calendars GUI (embedded)
 
 • Czyta wszystkie pliki CSV z folderu ./Kalendarze i tworzy zakładkę na każdy plik.
-• Nazwy zakładek bez prefiksu: "Kalendarze_S45_" / "Kalendarz_S45_" / "Kalendarze_" / "Kalendarz_".
+• Nazwy zakładek bez prefiksu: "Kalendarze_S51_" / "Kalendarz_S51_" / "Kalendarze_" / "Kalendarz_".
 • Tabela jest sortowalna, z autosizing kolumn.
 • Kolorowanie wierszy wg wartości w wybranej kolumnie (np. IND/TEAM/MIX/KO…):
   - domyślna kolumna: pierwsza pasująca z ["Typ","Rodzaj","Zawody","Tryb","Event"].
@@ -65,14 +65,14 @@ except Exception as e:  # pragma: no cover
     raise SystemExit("Ten moduł wymaga pandas: pip install pandas")
 
 APP_DIR = Path(__file__).resolve().parent
-DEFAULT_DIR = APP_DIR / "./S45/Kalendarze"
+DEFAULT_DIR = APP_DIR / "./S51/Kalendarze"
 FLAG_DIR = APP_DIR / "flags"  # 18x11 px
 
 # ===================== helpers =====================
 
 def _strip_prefixes(stem: str) -> str:
     s = str(stem)
-    for pref in ("Kalendarze_S45_", "Kalendarz_S45_", "Kalendarze_", "Kalendarz_"):
+    for pref in ("Kalendarze_S51_", "Kalendarz_S51_", "Kalendarze_", "Kalendarz_"):
         if s.startswith(pref):
             return s[len(pref):]
     return s
@@ -300,16 +300,16 @@ class CalendarsFrame(ttk.Frame):
         try:
             import pandas as pd
             _hills_candidates = [
-                APP_DIR / "S45" / "Skocznie_S45.csv",
-                APP_DIR / "S45" / "Skocznie S45.csv",
-                APP_DIR / "Skocznie_S45.csv",
-                APP_DIR / "Skocznie S45.csv",
-                Path("S45") / "Skocznie_S45.csv",
-                Path("Skocznie_S45.csv"),
+                APP_DIR / "S51" / "Skocznie_S51.csv",
+                APP_DIR / "S51" / "Skocznie S51.csv",
+                APP_DIR / "Skocznie_S51.csv",
+                APP_DIR / "Skocznie S51.csv",
+                Path("S51") / "Skocznie_S51.csv",
+                Path("Skocznie_S51.csv"),
             ]
             _hills_path = next((p for p in _hills_candidates if p.exists()), None)
             if _hills_path is None:
-                raise FileNotFoundError("Nie znaleziono pliku Skocznie S45.csv obok aplikacji")
+                raise FileNotFoundError("Nie znaleziono pliku Skocznie S51.csv obok aplikacji")
             hills_df = pd.read_csv(_hills_path, sep=';', encoding='cp1250')
         except Exception as e:
             print(f"Błąd wczytywania skoczni: {e}")
@@ -877,7 +877,7 @@ class HistoryFrame(ttk.Frame):
         dialog.grab_set()
         dialog.resizable(False, False)
 
-        ttk.Label(dialog, text="Podaj numer sezonu (np. S45):").pack(padx=20, pady=(16, 4))
+        ttk.Label(dialog, text="Podaj numer sezonu (np. S51):").pack(padx=20, pady=(16, 4))
         season_var = tk.StringVar()
         entry = ttk.Entry(dialog, textvariable=season_var, width=10)
         entry.pack(padx=20, pady=4)
@@ -1115,7 +1115,7 @@ class HistoryFrame(ttk.Frame):
         dialog.resizable(False, False)
         dialog.grab_set()
 
-        ttk.Label(dialog, text="Podaj sezon (np. S45):").pack(padx=20, pady=(16, 4))
+        ttk.Label(dialog, text="Podaj sezon (np. S51):").pack(padx=20, pady=(16, 4))
         season_var = tk.StringVar()
         entry = ttk.Entry(dialog, textvariable=season_var, width=12)
         entry.pack(padx=20, pady=(0, 12))
@@ -1175,7 +1175,7 @@ class HistoryFrame(ttk.Frame):
         for cal_file in cal_files:
             # Wyciągnij kod turnieju z nazwy pliku
             stem = cal_file.stem
-            # Usuń prefiks np. "Kalendarz_S45_" lub "Kalendarze_S45_"
+            # Usuń prefiks np. "Kalendarz_S51_" lub "Kalendarze_S51_"
             for pref in (f"Kalendarze_{season}_", f"Kalendarz_{season}_",
                          f"Kalendarze_{season.lower()}_", f"Kalendarz_{season.lower()}_",
                          "Kalendarze_", "Kalendarz_"):
@@ -1320,7 +1320,7 @@ class SeasonPlannerFrame(ttk.Frame):
         super().__init__(parent)
         self.main_app = main_app
         self.hills_df = main_app.host_tab.hills_df.copy()
-        self.season_var = tk.StringVar(value="S45")
+        self.season_var = tk.StringVar(value="S51")
         
         # --- KLUCZOWA POPRAWKA: Inicjalizacja słownika na samym starcie ---
         self.all_limits_data = {} 
@@ -1682,7 +1682,7 @@ class SeasonPlannerFrame(ttk.Frame):
             self.tree_limits.insert("", tk.END, values=(nat, lim, 0))
 
     def refresh_limits_for_cycle(self, gender, cycle):
-        """Ładuje limity. Obsługuje przeplatanie GP/SCOC oraz elastyczne nazwy plików (np. S45_WC-M)."""
+        """Ładuje limity. Obsługuje przeplatanie GP/SCOC oraz elastyczne nazwy plików (np. S51_WC-M)."""
         import re
         from pathlib import Path
         
@@ -1710,7 +1710,7 @@ class SeasonPlannerFrame(ttk.Frame):
 
         # Pomocnicza funkcja do szukania pliku z różnymi nazwami
         def find_nations_file(c, suf):
-            # Próbuje: S45_WC-M__nations.csv, WC-M__nations.csv, S45_WC_M... itd.
+            # Próbuje: S51_WC-M__nations.csv, WC-M__nations.csv, S51_WC_M... itd.
             possible_names = [
                 f"{prev_s}_{c}-{suf}__nations.csv",
                 f"{prev_s}_{c}_{suf}__nations.csv",
@@ -2109,7 +2109,7 @@ class SeasonPlannerFrame(ttk.Frame):
         try:
             s_num = int(re.search(r'\d+', s_str).group())
         except:
-            messagebox.showerror("Błąd", "Wpisz poprawny numer sezonu (np. S45)")
+            messagebox.showerror("Błąd", "Wpisz poprawny numer sezonu (np. S51)")
             return
 
         active_tours = self.get_active_tournaments(s_num)
@@ -2713,9 +2713,9 @@ class HostSelectionFrame(ttk.Frame):
         try:
             # Wczytanie z jawnym usunięciem spacji z nazw kolumn
             _cont_candidates = [
-                APP_DIR / "S45" / "ALL_NATIONS_CONTINENTS.csv",
+                APP_DIR / "S51" / "ALL_NATIONS_CONTINENTS.csv",
                 APP_DIR / "ALL_NATIONS_CONTINENTS.csv",
-                Path("S45") / "ALL_NATIONS_CONTINENTS.csv",
+                Path("S51") / "ALL_NATIONS_CONTINENTS.csv",
                 Path("ALL_NATIONS_CONTINENTS.csv"),
             ]
             _cont_path = next((p for p in _cont_candidates if p.exists()), None)
@@ -3215,9 +3215,9 @@ class EarningsFrame(ttk.Frame):
         if hasattr(self.main_app, 'dir_var'):
             folder_name = str(self.main_app.dir_var.get())
         else:
-            folder_name = str(getattr(self.main_app, 'cal_dir', 'S45'))
+            folder_name = str(getattr(self.main_app, 'cal_dir', 'S51'))
         m = re.search(r'S\d+', folder_name, re.IGNORECASE)
-        return m.group(0).upper() if m else "S45"
+        return m.group(0).upper() if m else "S51"
 
     def _load_nations_ranking(self) -> dict[str, int]:
         """Wczytuje klasyfikację WC-M narody → {NAT: pozycja}."""
@@ -3377,7 +3377,7 @@ class TotalEarningsFrame(ttk.Frame):
         self._setup_ui()
 
     def _get_season_suffix(self):
-        """Wyciąga numer sezonu (np. S45) z aktualnie wybranego folderu."""
+        """Wyciąga numer sezonu (np. S51) z aktualnie wybranego folderu."""
         # Używamy dir_var.get(), ponieważ to tam tkinter przechowuje aktualną ścieżkę
         if hasattr(self.main_app, 'dir_var'):
             folder_name = str(self.main_app.dir_var.get())
@@ -3387,7 +3387,7 @@ class TotalEarningsFrame(ttk.Frame):
         match = re.search(r'S\d+', folder_name, re.IGNORECASE)
         if match:
             return match.group(0).upper()
-        return "S45"
+        return "S51"
 
     def _load_prev_season_earnings(self):
         """Wczytuje Zysk Finalny krajów z poprzedniego sezonu."""
@@ -3510,9 +3510,9 @@ class TotalEarningsFrame(ttk.Frame):
     def export_to_csv(self):
         import csv
         import os
-        season = self._get_season_suffix()  # Pobiera np. "S45"
+        season = self._get_season_suffix()  # Pobiera np. "S51"
         
-        # Tworzenie ścieżki do folderu (np. ./S45)
+        # Tworzenie ścieżki do folderu (np. ./S51)
         folder_path = f"./{season}"
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)

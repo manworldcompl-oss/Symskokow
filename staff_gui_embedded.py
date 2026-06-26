@@ -4,8 +4,8 @@
 staff_gui_embedded.py — „Sztab” GUI (embedded)
 
 • Czyta dwa pliki CSV z domyślnymi nazwami:
-    - "Sztab M S45.csv" → zakładka MEN
-    - "Sztab W S45.csv" → zakładka WOMEN
+    - "Sztab M S51.csv" → zakładka MEN
+    - "Sztab W S51.csv" → zakładka WOMEN
 • Każdy plik ładowany jest do tabeli (Treeview) z automatycznym dopasowaniem kolumn,
   sortowaniem po kliknięciu nagłówka i poziomymi/pionowymi paskami przewijania.
 • Jeżeli w danych jest kolumna "Kraj" albo "NAT", z lewej strony pojawia się
@@ -121,9 +121,9 @@ class StaffFrame(ttk.Frame):
     def __init__(self, parent, flags_dir: Path | str = FLAGS_DIR):
         super().__init__(parent)
         self.flags_dir = Path(flags_dir)
-        self.men_var = tk.StringVar(value="S45/Sztab M S45.csv")
-        self.women_var = tk.StringVar(value="S45/Sztab W S45.csv")
-        self.season_var = tk.StringVar(value="S45") 
+        self.men_var = tk.StringVar(value="S51/Sztab M S51.csv")
+        self.women_var = tk.StringVar(value="S51/Sztab W S51.csv")
+        self.season_var = tk.StringVar(value="S51") 
         self._flag_cache = {}
         self._build()
 
@@ -288,7 +288,7 @@ class StaffFrame(ttk.Frame):
     def _rebuild_costs_tab(self):
         """Tworzy/odświeża kartę 'Koszty' z kolumnami:
            NAT, Suma, <Rola> M, <Rola> W (np. Fizjo M, Lekarz W, ...).
-           Źródło: Sztab M/W S45, kolumna 'Money' (case-insensitive).
+           Źródło: Sztab M/W S51, kolumna 'Money' (case-insensitive).
         """
         import pandas as pd
 
@@ -460,7 +460,7 @@ class StaffFrame(ttk.Frame):
             num = int(re.search(r'\d+', new_season).group())
             prev_season = f"S{num-1}"
         except:
-            messagebox.showerror("Błąd", "Format sezonu to np. S45")
+            messagebox.showerror("Błąd", "Format sezonu to np. S51")
             return
 
         for sex_tag, sex_full in [("M", "MEN"), ("W", "WOMEN")]:

@@ -45,14 +45,14 @@ class CampsModule(ttk.Frame):
         self.nb.add(self.tab_calc, text="Lista obozowa")
         self.nb.add(self.tab_summary, text="Podsumowanie finansowe")
         
-        self.players_path = str(APP_DIR / "S45" / "Zawodnicy S45gpt.csv")
-        self.camps_path   = str(APP_DIR / "S45" / "Obozy Szkoleniowe S45.csv")
-        self.costs_path   = str(APP_DIR / "S45" / "Koszty Obozu S45.csv")
+        self.players_path = str(APP_DIR / "S51" / "Zawodnicy S51gpt.csv")
+        self.camps_path   = str(APP_DIR / "S51" / "Obozy Szkoleniowe S51.csv")
+        self.costs_path   = str(APP_DIR / "S51" / "Koszty Obozu S51.csv")
         
         self._flag_cache = {}
         self._blank_flag = tk.PhotoImage(width=20, height=13)  # puste 20x13
-        self.staff_m = self._smart_load_staff("Sztab M S45.csv")
-        self.staff_w = self._smart_load_staff("Sztab W S45.csv")
+        self.staff_m = self._smart_load_staff("Sztab M S51.csv")
+        self.staff_w = self._smart_load_staff("Sztab W S51.csv")
         self.selected_players_data = []
 
         self._setup_selection_tab()
@@ -82,7 +82,7 @@ class CampsModule(ttk.Frame):
         return self._blank_flag
 
     def _smart_load_staff(self, filename):
-        paths = [str(APP_DIR / "S45" / filename), str(APP_DIR / filename), filename]
+        paths = [str(APP_DIR / "S51" / filename), str(APP_DIR / filename), filename]
         for p in paths:
             if os.path.exists(p):
                 for enc in ['cp1250', 'utf-8-sig']:
@@ -372,7 +372,7 @@ if __name__ == "__main__":
     top.pack(fill=tk.X)
 
     ttk.Label(top, text="Plik zawodników:").pack(side=tk.LEFT)
-    path_var = tk.StringVar(value=str(APP_DIR / "S45" / "Zawodnicy S45gpt.csv"))
+    path_var = tk.StringVar(value=str(APP_DIR / "S51" / "Zawodnicy S51gpt.csv"))
     path_entry = ttk.Entry(top, textvariable=path_var, width=60)
     path_entry.pack(side=tk.LEFT, padx=(4, 2))
 
@@ -394,14 +394,14 @@ if __name__ == "__main__":
             app_ref[0].destroy()
         app = CampsModule(root)
         app.players_path = p
-        # ustaw katalog S45 względem wybranego pliku
-        S45 = str(Path(p).parent)
-        fname = Path(p).stem  # np. "Zawodnicy S45gpt"
+        # ustaw katalog S51 względem wybranego pliku
+        S51 = str(Path(p).parent)
+        fname = Path(p).stem  # np. "Zawodnicy S51gpt"
         import re
         m = re.search(r"S\d+", fname)
-        season = m.group(0) if m else "S45"
-        app.camps_path = str(Path(S45) / f"Obozy Szkoleniowe {season}.csv")
-        app.costs_path = str(Path(S45) / f"Koszty Obozu {season}.csv")
+        season = m.group(0) if m else "S51"
+        app.camps_path = str(Path(S51) / f"Obozy Szkoleniowe {season}.csv")
+        app.costs_path = str(Path(S51) / f"Koszty Obozu {season}.csv")
         app.staff_m = app._smart_load_staff(f"Sztab M {season}.csv")
         app.staff_w = app._smart_load_staff(f"Sztab W {season}.csv")
         app._load_existing_camp_report()

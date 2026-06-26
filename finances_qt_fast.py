@@ -9,8 +9,8 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 # --- KONFIGURACJA ---
 DEFAULT_CANDIDATES = [
-    Path("./S45/Finanse S45.csv"),
-    Path("Finanse S45.csv"),
+    Path("./S51/Finanse S51.csv"),
+    Path("Finanse S51.csv"),
 ]
 
 def read_csv_loose(path: Path) -> pd.DataFrame:
@@ -222,7 +222,7 @@ class FrozenTableView(QtWidgets.QTableView):
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, initial_path: Path | None):
         super().__init__()
-        self.setWindowTitle("Finanse S45 — Panel Sterowania")
+        self.setWindowTitle("Finanse S51 — Panel Sterowania")
         self.resize(1200, 800)
         
         self._last_dir = str(initial_path.parent) if initial_path else "."
@@ -569,7 +569,7 @@ class MainWindow(QtWidgets.QMainWindow):
         hills_path = fin_path.parent / hills_name
 
         # Szukamy pliku rozbudowy pod kilkoma możliwymi nazwami
-        season = fin_path.stem.split()[-1]  # np. "S45"
+        season = fin_path.stem.split()[-1]  # np. "S51"
         expansion_candidates = [
             fin_path.parent / fin_path.name.replace("Finanse", "Rozbudowa"),
             fin_path.parent / f"Koszty_rozbudowy_skoczni_{season}.csv",
@@ -647,7 +647,7 @@ class MainWindow(QtWidgets.QMainWindow):
         path_str = self.ed_path.text().strip()
         fin_path = Path(path_str)
         
-        # Dynamiczne tworzenie nazwy pliku (np. Finanse S45 -> Koszty Obozu S45)
+        # Dynamiczne tworzenie nazwy pliku (np. Finanse S51 -> Koszty Obozu S51)
         camps_name = fin_path.name.replace("Finanse", "Koszty Obozu")
         camps_path = fin_path.parent / camps_name
 
@@ -705,7 +705,7 @@ class MainWindow(QtWidgets.QMainWindow):
         path_str = self.ed_path.text().strip()
         fin_path = Path(path_str)
         
-        # Dynamiczne tworzenie nazwy pliku (Finanse S45 -> Koszty Juniorów S45)
+        # Dynamiczne tworzenie nazwy pliku (Finanse S51 -> Koszty Juniorów S51)
         juniors_name = fin_path.name.replace("Finanse", "Koszty Juniorów")
         juniors_path = fin_path.parent / juniors_name
 
@@ -761,7 +761,7 @@ class MainWindow(QtWidgets.QMainWindow):
             return
 
         fin_path = Path(self.ed_path.text().strip())
-        # Szukamy pliku: Zysk Konkursy S45.csv
+        # Szukamy pliku: Zysk Konkursy S51.csv
         zyskk_name = fin_path.name.replace("Finanse", "Zysk Konkursy")
         zyskk_path = fin_path.parent / zyskk_name
 
@@ -800,7 +800,7 @@ class MainWindow(QtWidgets.QMainWindow):
             QtWidgets.QMessageBox.critical(self, "Błąd", f"Szczegóły: {str(e)}")
 
     def run_prizes_update(self):
-        """Aktualizuje kolumnę Nagrody na podstawie pliku Nagrody S45.csv."""
+        """Aktualizuje kolumnę Nagrody na podstawie pliku Nagrody S51.csv."""
         if self._df.empty:
             QtWidgets.QMessageBox.warning(self, "Błąd", "Najpierw wczytaj arkusz główny!")
             return
@@ -808,7 +808,7 @@ class MainWindow(QtWidgets.QMainWindow):
         path_str = self.ed_path.text().strip()
         fin_path = Path(path_str)
         
-        # Budujemy ścieżkę do pliku Nagrody S45.csv
+        # Budujemy ścieżkę do pliku Nagrody S51.csv
         prizes_name = fin_path.name.replace("Finanse", "Nagrody")
         prizes_path = fin_path.parent / prizes_name
 
@@ -879,7 +879,7 @@ class MainWindow(QtWidgets.QMainWindow):
             current_path = Path(self.ed_path.text())
             current_filename = current_path.name  
             match = re.search(r'S(\d+)', current_filename)
-            s_val = f"S{match.group(1)}" if match else "S45"
+            s_val = f"S{match.group(1)}" if match else "S51"
 
             base_dir = Path(f"./{s_val}")
             file_m = base_dir / f"Ranking FIS M {s_val}.csv"
@@ -957,7 +957,7 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def generuj_finanse_nowy_sezon(self, *args):
         nowy_sezon, ok = QInputDialog.getText(
-            None, "Nowy Sezon", "Podaj nazwę nowego sezonu (np. S45):",
+            None, "Nowy Sezon", "Podaj nazwę nowego sezonu (np. S51):",
             QLineEdit.Normal, ""
         )
         
@@ -965,23 +965,23 @@ class MainWindow(QtWidgets.QMainWindow):
             return 
 
         try:
-            # 1. Obliczanie ścieżki do poprzedniego sezonu (np. S45)
+            # 1. Obliczanie ścieżki do poprzedniego sezonu (np. S51)
             import re
             liczby = re.findall(r'\d+', nowy_sezon)
             if not liczby:
-                QMessageBox.warning(self, "Błąd", "Nazwa sezonu musi zawierać numer (np. S45)")
+                QMessageBox.warning(self, "Błąd", "Nazwa sezonu musi zawierać numer (np. S51)")
                 return
             
             numer_nowego = int(liczby[0])
             numer_starego = numer_nowego - 1
             stary_sezon = f"S{numer_starego}"
 
-            # Szukamy źródła: ./S45/Finanse S45.csv
+            # Szukamy źródła: ./S51/Finanse S51.csv
             sciezka_stara = os.path.join(stary_sezon, f"Finanse {stary_sezon}.csv")
             
             # Zabezpieczenie dla startu projektu (jeśli plik jest w folderze głównym)
             if not os.path.exists(sciezka_stara) and numer_starego == 38:
-                 sciezka_stara = "Finanse S45.csv"
+                 sciezka_stara = "Finanse S51.csv"
 
             if not os.path.exists(sciezka_stara):
                 QMessageBox.critical(self, "Błąd", f"Nie znaleziono pliku: {sciezka_stara}")

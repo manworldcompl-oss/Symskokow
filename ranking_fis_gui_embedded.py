@@ -7,7 +7,7 @@ Wejście:
 - Folder z klasyfikacjami generalnymi w CSV, w stylu:
     <TAG>__players.csv   (np. WC-M__players.csv, COC-W__players.csv)
     <TAG>__nations.csv   (opcjonalnie, do wyciągnięcia pełnej nazwy kraju)
-  Dopuszczalne nazwy z prefiksem sezonu: S45_<TAG>__players.csv itd.
+  Dopuszczalne nazwy z prefiksem sezonu: S51_<TAG>__players.csv itd.
 
 TAG-i używane tutaj:
 - MEN:   WC-M, GP-M, COC-M, FC-M, SCOC-M, JC-M, MC-M, PC-M, QC-M, TC-M, AC-M, BC-M, DC-M
@@ -52,7 +52,7 @@ except Exception:
     FLAG_CACHE = None
 
 ALL_NATIONS_PATH = Path("ALL_NATIONS.csv")
-MASTER_PLAYERS_DB = Path("S45/Zawodnicy S45gpt.csv")
+MASTER_PLAYERS_DB = Path("S51/Zawodnicy S51gpt.csv")
 
 __all__ = ["build_gui", "RankingFISFrame"]
 
@@ -292,7 +292,7 @@ def _pick_classif_file(root_dir: Path, tag: str, suffix: str = "players") -> Pat
     u_suffix = suffix.upper()
 
     # 2. Szukamy pliku, który zawiera w nazwie TAG oraz SUFFIX (np. "WC-M" i "PLAYERS")
-    # To zadziała dla: "S44_WC-M__players.csv", "WC-M__players.csv", "S45_WC-M__players.csv"
+    # To zadziała dla: "S44_WC-M__players.csv", "WC-M__players.csv", "S51_WC-M__players.csv"
     # WAŻNE: TAG musi być poprzedzony początkiem nazwy lub '_', żeby COC-M nie matchowało SCOC-M.
     def _tag_in_fname(fname: str, tag: str) -> bool:
         """Zwraca True tylko jeśli TAG jest osobnym tokenem (poprzedzony ^ lub _, zakończony _ lub $)."""
@@ -402,14 +402,14 @@ class FISRankingCalculator:
         self._all_nations_map: Dict[str, str] = _load_all_nations_map()
 
     def _detect_prefix(self, path: Path) -> str:
-        """Wykrywa prefix S45, S45 itp. z nazwy wybranego folderu lub folderu nadrzędnego."""
+        """Wykrywa prefix S51, S51 itp. z nazwy wybranego folderu lub folderu nadrzędnego."""
         # Szukamy wzorca S + cyfry w nazwie folderu
         match = re.search(r"S\d+", path.name)
         if match: return match.group(0)
         
         # Jeśli nie ma w nazwie folderu, sprawdź folder nadrzędny
         match = re.search(r"S\d+", path.parent.name)
-        return match.group(0) if match else "S45" # Fallback tylko w ostateczności
+        return match.group(0) if match else "S51" # Fallback tylko w ostateczności
 
     def _get_points_from_file(self, filename: str, multiplier: float, tag_for_pts: str) -> pd.Series:
         """Pobiera punkty za miejsca z konkretnego pliku CSV."""
@@ -544,7 +544,7 @@ class FISRankingCalculator:
         return mp
 
     def _load_master_db(self) -> pd.DataFrame | None:
-        """Wczytuje główną bazę zawodników (Zawodnicy S45gpt.csv)."""
+        """Wczytuje główną bazę zawodników (Zawodnicy S51gpt.csv)."""
         if hasattr(self, "_master_db"):
             return self._master_db
 
@@ -583,7 +583,7 @@ class FISRankingCalculator:
 
     def _senior_points_from_db(self, sex: str, min_age: int = 15) -> pd.Series:
         """
-        NAT -> 20, jeśli w bazie Zawodnicy S45gpt.csv jest przynajmniej jeden zawodnik
+        NAT -> 20, jeśli w bazie Zawodnicy S51gpt.csv jest przynajmniej jeden zawodnik
         danego kraju o zadanej płci i wieku >= min_age.
         sex: 'M' dla MEN, 'W' dla WOMEN.
         """
@@ -1103,7 +1103,7 @@ class CanvasRankingGrid(ttk.Frame):
 # ------------------ GŁÓWNA RAMKA ------------------ #
 
 class RankingFISFrame(ttk.Frame):
-    def __init__(self, parent, default_dir: str | Path = "./S45/Klasyfikacje S45"):
+    def __init__(self, parent, default_dir: str | Path = "./S51/Klasyfikacje S51"):
         super().__init__(parent)
 
         self.dir_var = tk.StringVar(value=str(default_dir))
@@ -1268,23 +1268,23 @@ class RankingFISFrame(ttk.Frame):
         from pathlib import Path
         from tkinter import messagebox
 
-        # Ścieżka wybrana przez użytkownika (np. C:/.../S45/Klasyfikacje S45)
+        # Ścieżka wybrana przez użytkownika (np. C:/.../S51/Klasyfikacje S51)
         selected_path = Path(self.dir_var.get().strip())
         
         if not selected_path.exists() or self.tbl_men._df is None:
             messagebox.showwarning("Eksport", "Najpierw wczytaj poprawne dane.")
             return
 
-        # 1. Szukamy tagu sezonu (np. S45) w nazwie folderu
+        # 1. Szukamy tagu sezonu (np. S51) w nazwie folderu
         match = re.search(r"S\d+", str(selected_path))
         season_tag = match.group(0) if match else "FIS_Export"
 
         # 2. Ustawiamy folder docelowy na RODZICA wybranego folderu
-        # Jeśli wybrałeś ".../S45/Klasyfikacje S45", to target_dir będzie ".../S45"
+        # Jeśli wybrałeś ".../S51/Klasyfikacje S51", to target_dir będzie ".../S51"
         target_dir = selected_path.parent
         
         # Jeśli jednak folder nadrzędny nie nazywa się tak jak sezon, 
-        # wymuszamy ścieżkę relatywną ./S45 w miejscu uruchomienia skryptu:
+        # wymuszamy ścieżkę relatywną ./S51 w miejscu uruchomienia skryptu:
         if season_tag not in target_dir.name:
             target_dir = Path(f"./{season_tag}")
 
@@ -1317,14 +1317,14 @@ class RankingFISFrame(ttk.Frame):
             messagebox.showwarning("Seed", "Brak danych w zakładce ALL. Najpierw wczytaj ranking.")
             return
 
-        # Wykryj sezon (np. S45) ze ścieżki i zwiększ o 1 (seed na kolejny sezon)
+        # Wykryj sezon (np. S51) ze ścieżki i zwiększ o 1 (seed na kolejny sezon)
         selected_path = Path(self.dir_var.get().strip())
         match = re.search(r"S(\d+)", str(selected_path))
         if match:
             next_num = int(match.group(1)) + 1
             season_tag = f"S{next_num}"
         else:
-            season_tag = "S45"
+            season_tag = "S51"
 
         # Folder docelowy: ./<sezon>/Team <sezon>/
         target_dir = Path(f"./{season_tag}/Team {season_tag}")
@@ -1355,8 +1355,8 @@ class RankingFISFrame(ttk.Frame):
     def _load_external_ranking(self, selected_folder: str) -> dict:
         """
         Wczytuje pliki rankingowe z dokładnie tych miejsc:
-          1) selected_folder / S45 / Team S45        -> CC, MSC, SWISS (NTC)
-          2) selected_folder / S45 / Team S45 / WC   -> pliki WC...DC (opcjonalnie)
+          1) selected_folder / S51 / Team S51        -> CC, MSC, SWISS (NTC)
+          2) selected_folder / S51 / Team S51 / WC   -> pliki WC...DC (opcjonalnie)
           3) selected_folder                         -> fallback
         Zwraca dict z mapami: { 'CC': {...}, 'MSC_M': {...}, 'MSC_W': {...}, 'SWISS': {...}, 'WC': {...} }
         Dokładne ścieżki są logowane (print) — dzięki temu w konsoli zobaczysz, co zostało sprawdzone.
@@ -1375,21 +1375,21 @@ class RankingFISFrame(ttk.Frame):
 
         # Szukamy w: 
         # 1) selected_folder
-        # 2) selected_folder/Team S45
-        # 3) selected_folder/../Team S45   (czyli rodzeństwo katalogu)
-        # 4) selected_folder/S45/Team S45
-        # 5) selected_folder/S45/Team S45/WC
-        # 6) selected_folder/../Klasyfikacje S45
-        # 7) selected_folder/../Team S45
+        # 2) selected_folder/Team S51
+        # 3) selected_folder/../Team S51   (czyli rodzeństwo katalogu)
+        # 4) selected_folder/S51/Team S51
+        # 5) selected_folder/S51/Team S51/WC
+        # 6) selected_folder/../Klasyfikacje S51
+        # 7) selected_folder/../Team S51
 
         dirs = [
             base,
-            base / "Team S45",
-            base.parent / "Team S45",
-            base / "S45" / "Team S45",
-            base / "S45" / "Team S45" / "WC",
-            base.parent / "Klasyfikacje S45",
-            base.parent / "Team S45",
+            base / "Team S51",
+            base.parent / "Team S51",
+            base / "S51" / "Team S51",
+            base / "S51" / "Team S51" / "WC",
+            base.parent / "Klasyfikacje S51",
+            base.parent / "Team S51",
         ]
 
 
@@ -1412,10 +1412,10 @@ class RankingFISFrame(ttk.Frame):
             print("  -", str(d))
 
         files_to_find = {
-            "CC":       ["S45_CC_Klasyfikacja.csv", "CC_Klasyfikacja.csv", "S45_CC.csv"],
-            "MSC_M":    ["S45_MSC_M_Klasyfikacja.csv", "MSC_M_Klasyfikacja.csv", "MSC_M.csv"],
-            "MSC_W":    ["S45_MSC_W_Klasyfikacja.csv", "MSC_W_Klasyfikacja.csv", "MSC_W.csv"],
-            "SWISS":    ["S45_SWISS_Klasyfikacja.csv", "SWISS_Klasyfikacja.csv", "SWISS.csv"],
+            "CC":       ["S51_CC_Klasyfikacja.csv", "CC_Klasyfikacja.csv", "S51_CC.csv"],
+            "MSC_M":    ["S51_MSC_M_Klasyfikacja.csv", "MSC_M_Klasyfikacja.csv", "MSC_M.csv"],
+            "MSC_W":    ["S51_MSC_W_Klasyfikacja.csv", "MSC_W_Klasyfikacja.csv", "MSC_W.csv"],
+            "SWISS":    ["S51_SWISS_Klasyfikacja.csv", "SWISS_Klasyfikacja.csv", "SWISS.csv"],
             "WC":       ["WC_Klasyfikacja.csv", "DC_Klasyfikacja.csv"]
         }
 
@@ -1805,7 +1805,7 @@ if __name__ == "__main__":
         root.attributes("-zoomed", True)
 
     # domyślny folder z klasyfikacjami – dopasuj do siebie
-    default_dir = Path("./S45/Klasyfikacje S45")
+    default_dir = Path("./S51/Klasyfikacje S51")
 
     app = RankingFISFrame(root, default_dir=default_dir)
     app.pack(fill=tk.BOTH, expand=True)

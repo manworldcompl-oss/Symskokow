@@ -74,7 +74,7 @@ class KlasyfikacjeTab(ttk.Frame):
     BASE_PREFIXES = ["WC","COC","FC","GP","SCOC","JC","MC","PC","QC","TC","AC","BC","DC"]
     DEFAULT_ORDER = [f"{p}-M" for p in BASE_PREFIXES] + [f"{p}-W" for p in BASE_PREFIXES]
 
-    def __init__(self, parent, default_excel="Klasyfikacje2 S45 — kopia.xlsx", flag_dir="./flags", default_dir="./S45/Klasyfikacje S45"):
+    def __init__(self, parent, default_excel="Klasyfikacje2 S51 — kopia.xlsx", flag_dir="./flags", default_dir="./S51/Klasyfikacje S51"):
         super().__init__(parent)
         self.excel_var = tk.StringVar(value=default_excel)
         self.dir_var = tk.StringVar(value=default_dir)
@@ -381,7 +381,7 @@ class KlasyfikacjeTab(ttk.Frame):
         """
         Szuka <tag>__{kind}.csv z opcjonalnym prefiksem:
         - {tag}__{kind}.csv
-        - S45_{tag}__{kind}.csv
+        - S51_{tag}__{kind}.csv
         - dowolne *_<tag>__{kind}.csv
         Zwraca pełną ścieżkę (najświeższą), albo None.
         """
@@ -393,7 +393,7 @@ class KlasyfikacjeTab(ttk.Frame):
             candidates.append(base)
 
         # typowy prefiks sezonu
-        pref = os.path.join(root, f"S45_{tag}__{kind}.csv")
+        pref = os.path.join(root, f"S51_{tag}__{kind}.csv")
         if os.path.isfile(pref):
             candidates.append(pref)
 
@@ -544,14 +544,14 @@ BYE_NAME_RE = re.compile(r'^\s*(?:\[\s*BYE\s*\]|BYE(?:\s+\d+)?)\s*$', re.I)
 
 # === HELPERY v3 (meta dla Upadków) ===
 # === RESOLVER ŚCIEŻEK (szuka w CWD i przy pliku .py) ===
-# === UNIVERSAL FILE LOCATOR (obsługuje S45/ i S44/) ===
+# === UNIVERSAL FILE LOCATOR (obsługuje S51/ i S44/) ===
 def _find_nearby_file(basename, alt_patterns=()):
     """
     Szuka pliku wg nazwy/wzorca w:
       - cwd
       - folderze tego pliku
-      - podfolderach 'S45' i 'S44' (dla obu powyższych korzeni)
-    Wspiera zarówno dokładne nazwy jak i globy (np. '*Sztab* S45*.csv').
+      - podfolderach 'S51' i 'S44' (dla obu powyższych korzeni)
+    Wspiera zarówno dokładne nazwy jak i globy (np. '*Sztab* S51*.csv').
     Zwraca ścieżkę jako str albo None.
     """
 
@@ -561,10 +561,10 @@ def _find_nearby_file(basename, alt_patterns=()):
             roots.append(Path(__file__).resolve().parent)
         except Exception:
             pass
-        # dorzuć warianty S45/ i S44/
+        # dorzuć warianty S51/ i S44/
         ext = []
         for r in roots:
-            ext.append(r / "S45")
+            ext.append(r / "S51")
             ext.append(r / "S44")
         return roots + ext
 
@@ -604,9 +604,9 @@ def _find_nearby_file(basename, alt_patterns=()):
                 except Exception:
                     continue
 
-    # 3) Ostatnia deska ratunku: rekursywnie w S45/ i S44/ (jak ktoś jeszcze niżej schował)
+    # 3) Ostatnia deska ratunku: rekursywnie w S51/ i S44/ (jak ktoś jeszcze niżej schował)
     for r in roots:
-        if r.name.upper() in {"S45", "S44"} and r.is_dir():
+        if r.name.upper() in {"S51", "S44"} and r.is_dir():
             for pat in patterns:
                 try:
                     for f in r.rglob(pat):
@@ -654,8 +654,8 @@ def _col(df, aliases, prefix_ok=False):
                 if k.startswith(a): return orig
     return None
 
-def _load_infra_centrum_med(path="Infrastruktura S45.csv"):
-    path = _find_nearby_file(path, alt_patterns=["*Infrastruktura* S45*.csv", "*Infrastruktura*.csv"])
+def _load_infra_centrum_med(path="Infrastruktura S51.csv"):
+    path = _find_nearby_file(path, alt_patterns=["*Infrastruktura* S51*.csv", "*Infrastruktura*.csv"])
     df = _read_tab_any(path) if path else None
     if df is None:
         print("DEBUG INFRA: brak pliku", path); return {}
@@ -684,9 +684,9 @@ def _load_best_staff_um(staff_path, want_sex: str, role_is_doctor_only=True):
     staff_path = _find_nearby_file(
         staff_path,
         alt_patterns=[
-            "*Sztab* S45*.csv",
-            "*Sztab*_*S45*.csv",
-            "*Sztab* M*.csv" if " M " in staff_path or staff_path.endswith(" M S45.csv") else "*Sztab* W*.csv",
+            "*Sztab* S51*.csv",
+            "*Sztab*_*S51*.csv",
+            "*Sztab* M*.csv" if " M " in staff_path or staff_path.endswith(" M S51.csv") else "*Sztab* W*.csv",
         ]
     )
     df = _read_tab_any(staff_path) if staff_path else None
@@ -733,8 +733,8 @@ def _enrich_falls_with_meta(falls_df, roster_df):
         falls_df["Sex"] = falls_df[name_f].map(dict(zip(tmp[name_r], tmp[sex_r]))).fillna("")
     else:
         falls_df["Sex"] = ""
-    docs_M = _load_best_staff_um("Sztab M S45.csv", "M", role_is_doctor_only=True)
-    docs_W = _load_best_staff_um("Sztab W S45.csv", "W", role_is_doctor_only=True)
+    docs_M = _load_best_staff_um("Sztab M S51.csv", "M", role_is_doctor_only=True)
+    docs_W = _load_best_staff_um("Sztab W S51.csv", "W", role_is_doctor_only=True)
     def _um_for(nat, sx):
         nat = str(nat).strip().upper(); sx = str(sx).strip().upper()
         if not nat: return ""
@@ -742,7 +742,7 @@ def _enrich_falls_with_meta(falls_df, roster_df):
         if sx=="M": return docs_M.get(nat, "")
         return docs_M.get(nat, "") or docs_W.get(nat, "")
     falls_df["Lekarz"] = falls_df.apply(lambda r: _um_for(r.get(kraj_falls,""), r.get("Sex","")) if kraj_falls else "", axis=1)
-    infra = _load_infra_centrum_med("Infrastruktura S45.csv")
+    infra = _load_infra_centrum_med("Infrastruktura S51.csv")
     if kraj_falls:
         falls_df["Infrastruktura"] = falls_df[kraj_falls].astype(str).str.upper().map(infra).fillna("")
     else:
@@ -1368,7 +1368,7 @@ class MainFrame(ttk.Frame):
     def _update_classifications_from_preview(self, season: str, cycle: str):
         """
         Aktualizuje pliki klasyfikacji na podstawie ostatnio wyświetlonej klasyfikacji końcowej.
-        Sezon: 'S45'; Cykl: 'WC-M', 'COC-W', ...
+        Sezon: 'S51'; Cykl: 'WC-M', 'COC-W', ...
         Zapis:
         - {season}_{cycle}__players.csv   (LP.,JUMPER,NAT,PTS)
         - {season}_{cycle}__nations.csv   (WC-*: LP.,NATION,NAT,T,I,PTS; else: LP.,NATION,NAT,PTS)
@@ -1408,10 +1408,10 @@ class MainFrame(ttk.Frame):
                     base.setdefault(str(k).upper(), str(v))
             except Exception:
                 pass
-            # spróbuj wyczytać z „Infrastruktura S45.csv”, jeśli ma kolumnę z nazwą
+            # spróbuj wyczytać z „Infrastruktura S51.csv”, jeśli ma kolumnę z nazwą
             try:
-                df = _read_tab_any(_find_nearby_file("Infrastruktura S45.csv",
-                                alt_patterns=["*Infrastruktura* S45*.csv", "*Infrastruktura*.csv"]))
+                df = _read_tab_any(_find_nearby_file("Infrastruktura S51.csv",
+                                alt_patterns=["*Infrastruktura* S51*.csv", "*Infrastruktura*.csv"]))
                 if df is not None:
                     nat_col = _col(df, ["KRAJ","NAT","Kod","Country"])
                     name_col= _col(df, ["REPREZENTACJA","Reprezentacja","Country Name","Kraj (pełna nazwa)"], prefix_ok=True)
@@ -1611,7 +1611,7 @@ class MainFrame(ttk.Frame):
         stage_key = str(stage_key or "").strip().upper()
 
         if not season:
-            raise ValueError("Podaj sezon (np. S45) dla klasyfikacji turnieju.")
+            raise ValueError("Podaj sezon (np. S51) dla klasyfikacji turnieju.")
         if not tour_code:
             raise ValueError("Podaj kod turnieju (np. TCS, RAWAIR-M).")
         if stage_key not in {"Q1","Q2","K1","K2","K3","K4"}:
@@ -1775,7 +1775,7 @@ class MainFrame(ttk.Frame):
     def _on_update_classif_clicked(self, season: str, cycle: str):
         try:
             if not season or not cycle:
-                raise ValueError("Podaj Sezon (np. S45) i Cykl (np. WC-M).")
+                raise ValueError("Podaj Sezon (np. S51) i Cykl (np. WC-M).")
 
             # --- Potwierdzenie przed aktualizacją ---
             try:
@@ -1862,7 +1862,7 @@ class MainFrame(ttk.Frame):
     def _export_champs_results(self, mode: str):
         # 1. Pobranie sezonu
         season_val = getattr(self, "_champs_season_var", None)
-        season_str = (season_val.get().strip() if season_val is not None else "S45") or "S45"
+        season_str = (season_val.get().strip() if season_val is not None else "S51") or "S51"
 
         # 2. Budowanie listy części nazwy
         # Jeśli mode == "QUAL", ignorujemy pole Typ (IND/TEAM) i wstawiamy "Q"
@@ -4301,11 +4301,11 @@ class MainFrame(ttk.Frame):
 
         falls_agg["ReturnWeek"] = pd.to_numeric(week_val) + pd.to_numeric(falls_agg["Długość kontuzji (WEEK)"], errors="coerce").fillna(0).astype(int) + 1
 
-        path = os.path.join("S45", "Zawodnicy S45gpt.csv")
+        path = os.path.join("S51", "Zawodnicy S51gpt.csv")
         if not os.path.exists(path):
             # fallback: szukaj względem skryptu
             _base = os.path.dirname(os.path.abspath(__file__))
-            path = os.path.join(_base, "S45", "Zawodnicy S45gpt.csv")
+            path = os.path.join(_base, "S51", "Zawodnicy S51gpt.csv")
         if not os.path.exists(path):
             messagebox.showerror("Aktualizacja bazy", f"Nie znaleziono pliku:\n{path}")
             return
@@ -4375,7 +4375,7 @@ class MainFrame(ttk.Frame):
             messagebox.showerror("Aktualizacja bazy", f"Nie udało się zapisać zmian:\n{e}")
             return
 
-                # === DOPISZ DO "Kontuzje S45.csv" – LOG WSZYSTKICH KONTUZJOWANYCH (robust) ===
+                # === DOPISZ DO "Kontuzje S51.csv" – LOG WSZYSTKICH KONTUZJOWANYCH (robust) ===
         try:
             
             falls_df_src  = falls_df if isinstance(falls_df, pd.DataFrame) else getattr(self, "_falls_last_df", None)
@@ -4398,7 +4398,7 @@ class MainFrame(ttk.Frame):
                 base = pd.DataFrame(columns=["Zawodnik","Kraj","Kontuzja (dni)","Długość kontuzji (WEEK)","ΔUM (kontuzja)","ΔForma (kontuzja)"])
 
             wrote_n = 0
-            csv_path = "Kontuzje S45.csv"
+            csv_path = "Kontuzje S51.csv"
             try:
                 csv_path = _find_nearby_file(csv_path) or csv_path
             except Exception:
@@ -4477,7 +4477,7 @@ class MainFrame(ttk.Frame):
                 print("[WARN] Kontuzje CSV:", _inj_csv_e)
             except Exception:
                 pass
-        # --- KONIEC dopisku do 'Kontuzje S45.csv' ---
+        # --- KONIEC dopisku do 'Kontuzje S51.csv' ---
 
         messagebox.showinfo("Aktualizacja bazy",
                     f"Zaktualizowano zawodników: {len(falls_agg)}\n"
@@ -4579,7 +4579,7 @@ class MainFrame(ttk.Frame):
             ("Punkty za metr (—meter) puste=auto", self.var_meter, float),
         ])
         # ——— Wybór z listy skoczni (CSV) ———
-        self.var_hills_csv = tk.StringVar(value="S45/Skocznie S45.csv")
+        self.var_hills_csv = tk.StringVar(value="S51/Skocznie S51.csv")
 
         row = ttk.Frame(sec_hill.body); row.grid(row=4, column=0, columnspan=3, sticky="we", pady=(6,0))
         row.columnconfigure(1, weight=1)
@@ -6908,14 +6908,14 @@ class MainFrame(ttk.Frame):
                 info_lbl.config(text=msg)
             except Exception as e:
                 info_lbl.config(text=f"Nie udało się uzupełnić: {e}")
-        # --- NOWE: wczytaj juniorów z S45/Juniorzy S45.csv i wypełnij JC..DC (M/W) ---
+        # --- NOWE: wczytaj juniorów z S51/Juniorzy S51.csv i wypełnij JC..DC (M/W) ---
         def _fill_junior_quotas_from_file(csv_path: str | None = None):
 
             try:
-                path = Path(csv_path or "S45/Juniorzy S45.csv")
+                path = Path(csv_path or "S51/Juniorzy S51.csv")
                 if not path.exists():
                     messagebox.showerror("Juniorzy – plik",
-                                         f"Nie znaleziono pliku: {path}\nUpewnij się, że jest w folderze S45.")
+                                         f"Nie znaleziono pliku: {path}\nUpewnij się, że jest w folderze S51.")
                     return
 
                 # CSV jest oddzielany ';', pierwsze wiersze mogą mieć puste komórki separatora
@@ -7001,8 +7001,8 @@ class MainFrame(ttk.Frame):
         btn_fill.pack(side=tk.LEFT)
         btn_jun = ttk.Button(
             tools,
-            text="Wczytaj juniorów (S45)",
-            command=lambda: _fill_junior_quotas_from_file("S45/Juniorzy S45.csv")
+            text="Wczytaj juniorów (S51)",
+            command=lambda: _fill_junior_quotas_from_file("S51/Juniorzy S51.csv")
         )
         btn_jun.pack(side=tk.LEFT, padx=(0,0))
     # === AUTOWYBÓR Z KWOT — COMPACT LOGIC ===
@@ -7642,7 +7642,7 @@ class MainFrame(ttk.Frame):
         bar_cls.pack(fill=tk.X, padx=8, pady=(0, 8))
 
         ttk.Label(bar_cls, text="Sezon:").pack(side=tk.LEFT)
-        self._cls_season_var = tk.StringVar(value="S45")
+        self._cls_season_var = tk.StringVar(value="S51")
         ttk.Entry(bar_cls, textvariable=self._cls_season_var, width=6).pack(side=tk.LEFT, padx=(4, 12))
 
         ttk.Label(bar_cls, text="Cykl:").pack(side=tk.LEFT)
@@ -7713,7 +7713,7 @@ class MainFrame(ttk.Frame):
         ).pack(side=tk.LEFT, padx=(4, 12))
 
         ttk.Label(bar_tour, text="Sezon:").pack(side=tk.LEFT)
-        self._tour_season_var = tk.StringVar(value="S45")
+        self._tour_season_var = tk.StringVar(value="S51")
         ttk.Entry(bar_tour, textvariable=self._tour_season_var, width=6).pack(side=tk.LEFT, padx=(4, 12))
 
         ttk.Button(
@@ -7731,7 +7731,7 @@ class MainFrame(ttk.Frame):
         bar_champs.pack(fill=tk.X, padx=8, pady=(0, 8))
 
         ttk.Label(bar_champs, text="Mistrzostwa:").pack(side=tk.LEFT)
-        self._champs_season_var = tk.StringVar(value="S45")
+        self._champs_season_var = tk.StringVar(value="S51")
         ttk.Entry(bar_champs, textvariable=self._champs_season_var, width=6).pack(side=tk.LEFT, padx=(4, 12))
 
         # 1. Nazwa zawodów
@@ -7979,7 +7979,7 @@ class MainFrame(ttk.Frame):
 
         frames = []
         for fpath in files:
-            # Wyciągnij nazwę cyklu z nazwy pliku, np. Kalendarz_S45_JC-M.csv → JC-M
+            # Wyciągnij nazwę cyklu z nazwy pliku, np. Kalendarz_S51_JC-M.csv → JC-M
             fname = os.path.basename(fpath)
             parts = fname.replace(".csv", "").split("_")
             cykl = parts[-1] if len(parts) >= 3 else fname
@@ -10027,7 +10027,7 @@ _INFRA_MAP = None
 _DOCTOR_MAP_M = None
 _DOCTOR_MAP_W = None
 
-def _load_infra_map_from_csv(path_candidates=("Infrastruktura S45.csv",)):
+def _load_infra_map_from_csv(path_candidates=("Infrastruktura S51.csv",)):
     """Return dict NAT->infra(1..5)."""
     global _INFRA_MAP
     if _inj_pd is None:
@@ -10037,8 +10037,8 @@ def _load_infra_map_from_csv(path_candidates=("Infrastruktura S45.csv",)):
 
     # Użyj _find_nearby_file żeby znaleźć plik niezależnie od CWD
     path = _find_nearby_file(
-        "Infrastruktura S45.csv",
-        alt_patterns=["*Infrastruktura* S45*.csv", "*Infrastruktura*.csv"]
+        "Infrastruktura S51.csv",
+        alt_patterns=["*Infrastruktura* S51*.csv", "*Infrastruktura*.csv"]
     )
     if not path:
         print("DEBUG _load_infra_map: nie znaleziono pliku")
@@ -10078,12 +10078,12 @@ def _load_infra_map_from_csv(path_candidates=("Infrastruktura S45.csv",)):
 
 # === POPRAWIONY BLOK MEDYCZNY ===
 
-def _load_doctor_map_from_staff_csv(path_candidates=("Sztab M S45.csv",), sex="M"):
+def _load_doctor_map_from_staff_csv(path_candidates=("Sztab M S51.csv",), sex="M"):
     if _inj_pd is None:
         return {}
     
     # Dynamiczne budowanie nazwy pliku na podstawie płci
-    staff_file = f"Sztab {sex} S45.csv"
+    staff_file = f"Sztab {sex} S51.csv"
     # Szukamy pliku w folderze projektu lub folderach nadrzędnych
     path = _find_nearby_file(staff_file, alt_patterns=[f"*Sztab*{sex}*.csv"])
     

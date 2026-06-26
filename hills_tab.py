@@ -1,16 +1,16 @@
 # -*- coding: utf-8 -*-
 """
 hills_tab.py — Moduł z dwiema podzakładkami:
- - "Skocznie"        → CSV: Skocznie S45.csv (Treeview + flagi)
- - "Infrastruktura"  → CSV: Infrastruktura S45.csv (CanvasGrid z kolorowaniem komórek)
+ - "Skocznie"        → CSV: Skocznie S51.csv (Treeview + flagi)
+ - "Infrastruktura"  → CSV: Infrastruktura S51.csv (CanvasGrid z kolorowaniem komórek)
 
 Użycie:
     from pathlib import Path
     from hills_tab import HillsTab
     self.hills_tab = HillsTab(
         parent,
-        default_hills=Path("Skocznie S45.csv"),
-        default_infra=Path("Infrastruktura S45.csv"),
+        default_hills=Path("Skocznie S51.csv"),
+        default_infra=Path("Infrastruktura S51.csv"),
         flags_dir=Path("./flags"),
     )
     self.hills_tab.pack(fill="both", expand=True)
@@ -126,7 +126,7 @@ def _compute_current_fis_class(row) -> str:
 
 
 def load_operational_classes(path) -> pd.DataFrame:
-    """Wczytuje Klasa operacyjna S45.csv lub zwraca pusty DataFrame."""
+    """Wczytuje Klasa operacyjna S51.csv lub zwraca pusty DataFrame."""
     p = Path(path)
     if p.exists():
         for enc in ("utf-8", "utf-8-sig", "cp1250"):
@@ -270,7 +270,7 @@ def _get_flag_image(flags_dir: Path | None, code: str):
     except Exception:
         return None
 
-# === AGREGACJA KOMPLEKSÓW Z „SKOCZNIE S45.csv” ===
+# === AGREGACJA KOMPLEKSÓW Z „SKOCZNIE S51.csv” ===
 
 def _kx_from_hs_list(hs_vals):
     """Z listy HS-ów w mieście zbuduj Kx: F (HS>179), L (111-179), N (<111)."""
@@ -511,7 +511,7 @@ def _parse_nas(val):
 
 def compute_complex_costs(df):
     """
-    Przyjmuje DF z 'Kompleksy S45.csv' i zwraca:
+    Przyjmuje DF z 'Kompleksy S51.csv' i zwraca:
       - df_rows: koszty dla każdego obiektu,
       - by_country_sum: suma per kraj,
       - by_country_breakdown: rozbicie per składnik per kraj,
@@ -854,7 +854,7 @@ def _rebuild_cost(row_before, row_after) -> int:
 
 def compute_build_extend_costs(df_log):
     """
-    Liczy koszty budowy / rozbudowy na podstawie logu Rozbudowa S45.csv.
+    Liczy koszty budowy / rozbudowy na podstawie logu Rozbudowa S51.csv.
 
     Zwraca:
       - df_invest: wiersz na inwestycję (TS) z kolumnami:
@@ -1288,7 +1288,7 @@ class CsvViewer(ttk.Frame):
             return
 
         # Wykryj numer sezonu z nazwy pliku lub folderu nadrzędnego
-        # np. "./S45/Skocznie S45.csv" → S45 → next = S45
+        # np. "./S51/Skocznie S51.csv" → S51 → next = S51
         match = _re2.search(r"S(\d+)", str(cur_path))
         if not match:
             messagebox.showerror("Błąd", "Nie udało się wykryć numeru sezonu ze ścieżki pliku.")
@@ -1387,7 +1387,7 @@ class CsvViewer(ttk.Frame):
                 app_dir = Path(__file__).resolve().parent
             except Exception:
                 app_dir = Path(".")
-            fallback = app_dir / "./S45/Skocznie S45.csv"
+            fallback = app_dir / "./S51/Skocznie S51.csv"
             if fallback.exists():
                 path = fallback; self.var_path.set(str(path))
 
@@ -1585,7 +1585,7 @@ class InfraCanvasGrid(ttk.Frame):
                 app_dir = Path(__file__).resolve().parent
             except Exception:
                 app_dir = Path(".")
-            fallback = app_dir / "Infrastruktura S45.csv"
+            fallback = app_dir / "Infrastruktura S51.csv"
             if fallback.exists():
                 path = fallback; self.var_path.set(str(path))
 
@@ -1906,7 +1906,7 @@ class HillsTab(ttk.Frame):
             try:
                 # Sortujemy i zapisujemy
                 df_to_save = df_sum.sort_values("Suma", ascending=False)
-                output_path = Path("S45/Koszty rozbudowy skoczni S45.csv")
+                output_path = Path("S51/Koszty rozbudowy skoczni S51.csv")
                 output_path.parent.mkdir(parents=True, exist_ok=True)
                 df_to_save.to_csv(output_path, sep=";", index=False, encoding="cp1250")
             except Exception as e:
@@ -1918,7 +1918,7 @@ class HillsTab(ttk.Frame):
             try:
                 df_to_save = df_sum.copy()
                 df_to_save = df_to_save.sort_values("Suma", ascending=False)
-                output_path = Path("S45/Koszty rozbudowy skoczni S45.csv")
+                output_path = Path("S51/Koszty rozbudowy skoczni S51.csv")
                 df_to_save.to_csv(output_path, sep=";", index=False, encoding="cp1250")
                 messagebox.showinfo("Eksport", f"Wyeksportowano do:\n{output_path}")
             except Exception as e:
@@ -1930,7 +1930,7 @@ class HillsTab(ttk.Frame):
         """Metoda klasy przeliczająca koszty i wymuszająca eksport."""
         path_str = self._buildlog_path_var.get().strip()
         if not path_str:
-            messagebox.showwarning("Koszty budowy", "Podaj ścieżkę do pliku Rozbudowa S45.csv.")
+            messagebox.showwarning("Koszty budowy", "Podaj ścieżkę do pliku Rozbudowa S51.csv.")
             return
         
         p = Path(path_str)
@@ -2084,7 +2084,7 @@ class HillsTab(ttk.Frame):
         self._complexes_wrap = ttk.Frame(tab_c)
         self._complexes_wrap.pack(fill="both", expand=True)
 
-        nb.add(HillBuilderTab(nb, csv_path="S45/Skocznie S45.csv"), text="Budowa skoczni")
+        nb.add(HillBuilderTab(nb, csv_path="S51/Skocznie S51.csv"), text="Budowa skoczni")
 
 
         def _render_complexes_tab():
@@ -2178,7 +2178,7 @@ class HillsTab(ttk.Frame):
         nb.add(tab_homo, text="Homologacje")
         self._build_homologations_tab(tab_homo)
 
-        # --- Koszty budowy / rozbudowy (Rozbudowa S45.csv) ---
+        # --- Koszty budowy / rozbudowy (Rozbudowa S51.csv) ---
         tab_build_costs = ttk.Frame(nb, name="koszty_budowy")
         nb.add(tab_build_costs, text="Koszty budowy")
 
@@ -2188,9 +2188,9 @@ class HillsTab(ttk.Frame):
         top_bc = ttk.Frame(tab_build_costs)
         top_bc.pack(fill="x", padx=8, pady=(8, 4))
 
-        # domyślna ścieżka: S45/Rozbudowa S45.csv
+        # domyślna ścieżka: S51/Rozbudowa S51.csv
         self._buildlog_path_var = tk.StringVar(
-            value=str(Path("S45") / "Rozbudowa S45.csv")
+            value=str(Path("S51") / "Rozbudowa S51.csv")
         )
 
         ttk.Label(top_bc, text="Plik logu rozbudowy:").pack(side="left")
@@ -2199,7 +2199,7 @@ class HillsTab(ttk.Frame):
 
         def _pick_buildlog():
             p = filedialog.askopenfilename(
-                title="Wybierz Rozbudowa S45.csv",
+                title="Wybierz Rozbudowa S51.csv",
                 filetypes=[("CSV", "*.csv"), ("Wszystkie pliki", "*.*")]
             )
             if p:
@@ -2226,7 +2226,7 @@ class HillsTab(ttk.Frame):
 
             if mode == "Kraje — suma":
                 # Jeśli istnieje plik klasy operacyjnej, stosuj mnożniki
-                op_path = Path(getattr(self, "_op_class_path", "S45/Klasa operacyjna S45.csv"))
+                op_path = Path(getattr(self, "_op_class_path", "S51/Klasa operacyjna S51.csv"))
                 df_op = load_operational_classes(op_path)
                 df_rows_cached = _cache.get("df_rows")
                 if df_rows_cached is not None and not df_rows_cached.empty and not df_op.empty:
@@ -2246,7 +2246,7 @@ class HillsTab(ttk.Frame):
 
             if df_to_save is not None and not df_to_save.empty:
                 try:
-                    output_path = Path("S45/Utrzymanie Skoczni S45.csv")
+                    output_path = Path("S51/Utrzymanie Skoczni S51.csv")
                     df_to_save.to_csv(output_path, sep=";", index=False, encoding="cp1250")
                     messagebox.showinfo("Eksport", f"Wyeksportowano{note} do:\n{output_path}")
                 except Exception as e:
@@ -2265,7 +2265,7 @@ class HillsTab(ttk.Frame):
             "by_country": _pd.DataFrame(),
         }
 
-        # --- Koszty rozbudowy Infrastruktury (Rozbudowa Infrastruktury S45.csv) ---
+        # --- Koszty rozbudowy Infrastruktury (Rozbudowa Infrastruktury S51.csv) ---
         tab_infra_costs = ttk.Frame(nb, name="koszty_infra")
         nb.add(tab_infra_costs, text="Koszty rozbudowy Infrastruktury")
 
@@ -2274,9 +2274,9 @@ class HillsTab(ttk.Frame):
 
         # domyślna ścieżka do logu rozbudowy infrastruktury
         try:
-            default_infra_log = Path("S45") / "Rozbudowa Infrastruktury S45.csv"
+            default_infra_log = Path("S51") / "Rozbudowa Infrastruktury S51.csv"
         except Exception:
-            default_infra_log = Path("Rozbudowa Infrastruktury S45.csv")
+            default_infra_log = Path("Rozbudowa Infrastruktury S51.csv")
 
         self._infralog_path_var = tk.StringVar(value=str(default_infra_log))
 
@@ -2286,7 +2286,7 @@ class HillsTab(ttk.Frame):
 
         def _pick_infralog():
             p = filedialog.askopenfilename(
-                title="Wybierz Rozbudowa Infrastruktury S45.csv",
+                title="Wybierz Rozbudowa Infrastruktury S51.csv",
                 filetypes=[("CSV", "*.csv"), ("Wszystkie pliki", "*.*")]
             )
             if p:
@@ -2584,7 +2584,7 @@ class HillsTab(ttk.Frame):
         _render_complexes_tab()
 
         # Klasa operacyjna skoczni
-        self._op_class_path = "S45/Klasa operacyjna S45.csv"
+        self._op_class_path = "S51/Klasa operacyjna S51.csv"
         tab_op = ttk.Frame(nb, name="klasa_operacyjna")
         nb.add(tab_op, text="Klasa operacyjna")
         self._op_class_tab = OperationalClassTab(tab_op, hills_tab_ref=self)
@@ -3558,7 +3558,7 @@ class HillsTab(ttk.Frame):
 
     def _infra_upgrade_append_log(self, infra_path):
         """
-        Dopisuje do 'Rozbudowa Infrastruktury S45.csv' snapshot PRZED/PO + cena
+        Dopisuje do 'Rozbudowa Infrastruktury S51.csv' snapshot PRZED/PO + cena
         tylko dla wierszy, w których podniesiono poziom któregoś z centrów.
         """
         import pandas as pd
@@ -3578,7 +3578,7 @@ class HillsTab(ttk.Frame):
 
         # plik logu obok pliku infrastruktury
         infra_path = Path(infra_path)
-        out_path = infra_path.with_name("Rozbudowa Infrastruktury S45.csv")
+        out_path = infra_path.with_name("Rozbudowa Infrastruktury S51.csv")
 
         LOG_HEADERS = ["TS", "Reprezentacja", "Kraj", "Stan", "ME", "EK", "IN", "ED", "Cena"]
         new_file = not out_path.exists() or out_path.stat().st_size == 0
@@ -3673,14 +3673,14 @@ class HillsTab(ttk.Frame):
 
         path = Path(path_str)
 
-        # 1) Spróbuj dopisać log PRZED/PO + cena do Rozbudowa Infrastruktury S45.csv
+        # 1) Spróbuj dopisać log PRZED/PO + cena do Rozbudowa Infrastruktury S51.csv
         try:
             self._infra_upgrade_append_log(path)
         except Exception as e:
             # nie wywalaj zapisu infrastruktury jeśli log padnie
             messagebox.showwarning(
                 "Infrastruktura",
-                f"Zapis infrastruktury OK, ale nie udało się dopisać logu do 'Rozbudowa Infrastruktury S45.csv':\n{e}"
+                f"Zapis infrastruktury OK, ale nie udało się dopisać logu do 'Rozbudowa Infrastruktury S51.csv':\n{e}"
             )
 
         # 2) Zapisz zaktualizowany plik infrastruktury
@@ -3725,7 +3725,7 @@ class OperationalClassTab(ttk.Frame):
         top = ttk.Frame(self)
         top.pack(fill="x", padx=8, pady=(8, 4))
         ttk.Label(top, text="Plik klasy operacyjnej:").pack(side="left")
-        self._path_var = tk.StringVar(value="S45/Klasa operacyjna S45.csv")
+        self._path_var = tk.StringVar(value="S51/Klasa operacyjna S51.csv")
         ttk.Entry(top, textvariable=self._path_var, width=42).pack(side="left", padx=4, fill="x", expand=True)
         ttk.Button(top, text="Wybierz…", command=self._pick_file).pack(side="left")
         ttk.Button(top, text="Załaduj", command=self.refresh).pack(side="left", padx=(4, 0))
@@ -3941,8 +3941,8 @@ class OperationalClassTab(ttk.Frame):
 
 
 class HillBuilderTab(ttk.Frame):
-    """Zakładka: Budowa skoczni — formularz dodający nową skocznię do Skocznie S45.csv"""
-    def __init__(self, parent, csv_path="S45/Skocznie S45.csv"):
+    """Zakładka: Budowa skoczni — formularz dodający nową skocznię do Skocznie S51.csv"""
+    def __init__(self, parent, csv_path="S51/Skocznie S51.csv"):
         super().__init__(parent)
         p = Path(csv_path)
         if not p.is_absolute():
@@ -4373,7 +4373,7 @@ class HillBuilderTab(ttk.Frame):
         try:
             self._append_rebuild_snapshots(old_vals, new_vals)
         except Exception as e:
-            messagebox.showwarning("Uwaga", f"Zapis zmian OK, ale nie dopisano logu do 'Rozbudowa S45.csv':\n{e}")
+            messagebox.showwarning("Uwaga", f"Zapis zmian OK, ale nie dopisano logu do 'Rozbudowa S51.csv':\n{e}")
 
         messagebox.showinfo("Sukces", f"Zapisano zmiany do: {self.csv_path}")
 
@@ -4405,7 +4405,7 @@ class HillBuilderTab(ttk.Frame):
         # Dodajemy kolumnę Cena do nagłówków
         LOG_HEADERS = ["TS","Stan"] + HEADERS + ["Typ inwestycji", "Cena"]
 
-        out_path = Path(self.csv_path).with_name("Rozbudowa S45.csv")
+        out_path = Path(self.csv_path).with_name("Rozbudowa S51.csv")
         new_file = not out_path.exists() or out_path.stat().st_size == 0
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -4457,7 +4457,7 @@ class HillBuilderTab(ttk.Frame):
                    "Miejsca dla kibiców","OŚ","Ig","Tw","Kk","Ks","Poc","Sia","Naś"]
         LOG_HEADERS = ["TS","Stan"] + HEADERS + ["Typ inwestycji", "Cena"]
 
-        out_path = Path(self.csv_path).with_name("Rozbudowa S45.csv")
+        out_path = Path(self.csv_path).with_name("Rozbudowa S51.csv")
         new_file = not out_path.exists() or out_path.stat().st_size == 0
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -4576,11 +4576,11 @@ class HillBuilderTab(ttk.Frame):
                 pass
 
             try:
-                self._append_build_entry(row)  # ← to dopisze wiersz typu "BUDOWA" do Rozbudowa S45.csv
+                self._append_build_entry(row)  # ← to dopisze wiersz typu "BUDOWA" do Rozbudowa S51.csv
             except Exception as e:
                 messagebox.showwarning(
                     "Uwaga",
-                    f"Dopisano skocznię, ale nie zapisano logu do 'Rozbudowa S45.csv':\n{e}"
+                    f"Dopisano skocznię, ale nie zapisano logu do 'Rozbudowa S51.csv':\n{e}"
                 )
 
             # Czyść pola tekstowe (comboboksy zostaw)
@@ -4610,9 +4610,9 @@ if __name__ == "__main__":
 
     HillsTab(
         tab,
-        default_hills=Path("./S45/Skocznie S45.csv"),
-        default_infra=Path("./S45/Infrastruktura S45.csv"),
-        default_complexes=Path("./S45/Kompleksy S45.csv"),
+        default_hills=Path("./S51/Skocznie S51.csv"),
+        default_infra=Path("./S51/Infrastruktura S51.csv"),
+        default_complexes=Path("./S51/Kompleksy S51.csv"),
         flags_dir=Path("./flags"),
     ).pack(fill="both", expand=True)
 
