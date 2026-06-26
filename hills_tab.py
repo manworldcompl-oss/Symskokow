@@ -3962,6 +3962,92 @@ class HillsTab(ttk.Frame):
         messagebox.showinfo("Infrastruktura", f"Zapisano zmiany do pliku:\n{path}")
 
 
+_CLASS_RANK = {"Pełna": 0, "Połowiczna": 1, "Minimalna": 2}
+
+
+class _DowngradeDialog(tk.Toplevel):
+    """Dialog z checkboxami do wyboru, które obniżenia klasy operacyjnej zatwierdzić."""
+
+    def __init__(self, parent, downgrades: list):
+        """
+        downgrades: list of (kraj, miasto, cur_cls, new_cls)
+        Po zamknięciu: self.approved – set of (kraj, miasto) gdzie obniżenie zatwierdzone,
+                       self.cancelled – True jeśli użytkownik anulował.
+        """
+        super().__init__(parent)
+        self.title("Planowane obniżenia klasy operacyjnej")
+        self.resizable(True, True)
+        self.approved: set = set()
+        self.cancelled: bool = True
+        self._vars: dict = {}
+
+        ttk.Label(
+            self,
+            text="Odznacz skocznie, których klasy NIE chcesz obniżać:",
+            font=("TkDefaultFont", 9, "bold")
+        ).pack(padx=12, pady=(10, 4), anchor="w")
+
+        # Scrollowalna lista
+        outer = ttk.Frame(self)
+        outer.pack(fill="both", expand=True, padx=12)
+        canvas = tk.Canvas(outer, height=min(400, max(120, len(downgrades) * 26 + 20)),
+                           highlightthickness=0)
+        vsb = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        vsb.pack(side="right", fill="y")
+
+        inner = ttk.Frame(canvas)
+        win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+        inner.bind("<Configure>", lambda e: canvas.configure(
+            scrollregion=canvas.bbox("all")))
+        canvas.bind("<Configure>", lambda e: canvas.itemconfig(win_id, width=e.width))
+
+        # Nagłówek
+        hdr = ttk.Frame(inner)
+        hdr.pack(fill="x", pady=(0, 2))
+        ttk.Label(hdr, text="Kraj", width=7, anchor="w").pack(side="left")
+        ttk.Label(hdr, text="Miasto", width=18, anchor="w").pack(side="left")
+        ttk.Label(hdr, text="Zmiana klasy", width=30, anchor="w").pack(side="left")
+        ttk.Label(hdr, text="Obniż?", width=8, anchor="center").pack(side="left")
+        ttk.Separator(inner, orient="horizontal").pack(fill="x")
+
+        for kraj, miasto, cur_cls, new_cls in sorted(downgrades, key=lambda x: (x[0], x[1])):
+            var = tk.BooleanVar(value=True)   # domyślnie: zatwierdź obniżenie
+            self._vars[(kraj, miasto)] = var
+            row = ttk.Frame(inner)
+            row.pack(fill="x", pady=1)
+            ttk.Label(row, text=kraj, width=7, anchor="w").pack(side="left")
+            ttk.Label(row, text=miasto, width=18, anchor="w").pack(side="left")
+            ttk.Label(row, text=f"{cur_cls}  →  {new_cls}", width=30, anchor="w").pack(side="left")
+            ttk.Checkbutton(row, variable=var).pack(side="left")
+
+        # Przyciski
+        ttk.Separator(self, orient="horizontal").pack(fill="x", padx=12, pady=(4, 0))
+        btn_bar = ttk.Frame(self)
+        btn_bar.pack(fill="x", padx=12, pady=8)
+        ttk.Button(btn_bar, text="Zaznacz wszystkie",
+                   command=lambda: [v.set(True)  for v in self._vars.values()]).pack(side="left")
+        ttk.Button(btn_bar, text="Odznacz wszystkie",
+                   command=lambda: [v.set(False) for v in self._vars.values()]).pack(side="left", padx=4)
+        ttk.Button(btn_bar, text="Anuluj", command=self._cancel).pack(side="right")
+        ttk.Button(btn_bar, text="Zastosuj", command=self._apply).pack(side="right", padx=4)
+
+        self.transient(parent)
+        self.grab_set()
+        self.update_idletasks()
+        self.minsize(500, 200)
+
+    def _apply(self):
+        self.approved = {k for k, v in self._vars.items() if v.get()}
+        self.cancelled = False
+        self.destroy()
+
+    def _cancel(self):
+        self.cancelled = True
+        self.destroy()
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 class OperationalClassTab(ttk.Frame):
     """Zakładka: Klasa operacyjna skoczni (wybór per kompleks + degradacja)."""
@@ -4203,30 +4289,28 @@ class OperationalClassTab(ttk.Frame):
 
     def _auto_op_classes(self):
         """Auto-przelicza klasy operacyjne z klasyfikacji poprzedniego sezonu."""
-        # Ustal numer sezonu z ścieżki pliku klasy operacyjnej
+        # 1. Ustal numer sezonu z ścieżki pliku klasy operacyjnej
         op_path_str = self._path_var.get().strip()
         m = re.search(r'S(\d+)', op_path_str, re.IGNORECASE)
         if not m:
             messagebox.showerror("Błąd", "Nie można ustalić numeru sezonu ze ścieżki pliku.", parent=self)
             return
         cur_s_num = int(m.group(1))
-        prev_s_num = cur_s_num - 1
-        prev_s = f"S{prev_s_num}"
+        prev_s = f"S{cur_s_num - 1}"
 
-        # Szukaj katalogu klasyfikacji poprzedniego sezonu
         search_dirs = [
             Path(f"{prev_s}/Klasyfikacje {prev_s}"),
             Path(op_path_str).parent.parent / prev_s / f"Klasyfikacje {prev_s}",
         ]
         search_dir = next((d for d in search_dirs if d.exists()), search_dirs[0])
 
-        # Wczytaj kompleksy skoczni
+        # 2. Wczytaj kompleksy skoczni
         df_c = self._get_complexes()
         if df_c.empty:
             messagebox.showerror("Błąd", "Brak danych skoczni. Wczytaj plik Skocznie.", parent=self)
             return
 
-        # Oblicz demand per kraj
+        # 3. Oblicz demand per kraj
         country_demand, wc_demand = compute_op_class_demands(search_dir, prev_s)
         if not country_demand:
             messagebox.showwarning(
@@ -4237,7 +4321,7 @@ class OperationalClassTab(ttk.Frame):
             )
             return
 
-        # Zgrupuj skocznie per kraj, posortowane malejąco po pojemności
+        # 4. Zgrupuj skocznie per kraj, posortowane malejąco po pojemności
         country_hills: dict = {}
         for _, r in df_c.iterrows():
             nat = str(r.get("Kraj", "")).strip().upper()
@@ -4247,34 +4331,65 @@ class OperationalClassTab(ttk.Frame):
         for nat in country_hills:
             country_hills[nat].sort(key=lambda x: x[1], reverse=True)
 
-        # Przypisz klasy per kraj
-        changed = 0
+        # 5. Wyznacz proponowane klasy
+        proposed: dict = {}  # (nat, miasto) → klasa
         for nat, hills in country_hills.items():
+            # Kraj z 1 skocznią → zawsze Pełna
+            if len(hills) == 1:
+                proposed[(nat, hills[0][0])] = "Pełna"
+                continue
             demand = country_demand.get(nat, 0) + 1   # +1 slot juniorski
             total_active = min(math.ceil(demand / 2), len(hills))
-            wc_d = wc_demand.get(nat, 0)
-            pełna_n = min(wc_d, total_active)
+            pełna_n = min(wc_demand.get(nat, 0), total_active)
             poł_n = total_active - pełna_n
             for i, (miasto, _) in enumerate(hills):
-                key = (nat, miasto)
-                self._data.setdefault(key, {"Klasa": "Pełna", "Sezony_POL": 0, "Sezony_MIN": 0})
                 if i < pełna_n:
                     klasa = "Pełna"
                 elif i < pełna_n + poł_n:
                     klasa = "Połowiczna"
                 else:
                     klasa = "Minimalna"
-                self._data[key]["Klasa"] = klasa
-                changed += 1
+                proposed[(nat, miasto)] = klasa
 
-        # Odśwież tabele
+        # 6. Znajdź obniżenia względem obecnych ustawień
+        downgrades = []
+        for (nat, miasto), new_cls in proposed.items():
+            cur_cls = self._data.get((nat, miasto), {}).get("Klasa", "Pełna")
+            if _CLASS_RANK.get(new_cls, 2) > _CLASS_RANK.get(cur_cls, 0):
+                downgrades.append((nat, miasto, cur_cls, new_cls))
+
+        # 7. Dialog z checkboxami dla obniżeń
+        approved_downgrades: set = set()
+        if downgrades:
+            dlg = _DowngradeDialog(self, downgrades)
+            self.wait_window(dlg)
+            if dlg.cancelled:
+                return
+            approved_downgrades = dlg.approved
+        else:
+            approved_downgrades = set()
+
+        # 8. Zastosuj proponowane klasy (blokuj niezatwierdzone obniżenia)
+        downgrade_keys = {(n, m) for n, m, _, _ in downgrades}
+        for (nat, miasto), new_cls in proposed.items():
+            key = (nat, miasto)
+            self._data.setdefault(key, {"Sezony_POL": 0, "Sezony_MIN": 0})
+            if key in downgrade_keys and key not in approved_downgrades:
+                # Użytkownik odznaczył → zachowaj obecną klasę
+                pass
+            else:
+                self._data[key]["Klasa"] = new_cls
+
+        # 9. Odśwież widok
         df_rows, *_ = compute_complex_costs(df_c)
         self._render(df_rows)
+        blocked = len(downgrade_keys) - len(approved_downgrades)
         messagebox.showinfo(
             "Auto-przeliczanie gotowe",
-            f"Przeliczono klasy dla {len(country_hills)} krajów ({changed} kompleksów).\n"
-            f"Dane z klasyfikacji: {prev_s}\n\n"
-            "Kliknij 'Zapisz', żeby utrwalić zmiany.",
+            f"Przeliczono klasy dla {len(country_hills)} krajów.\n"
+            f"Dane z klasyfikacji: {prev_s}\n"
+            + (f"Zablokowano {blocked} obniżeń (zachowano obecną klasę).\n" if blocked else "")
+            + "\nKliknij 'Zapisz', żeby utrwalić zmiany.",
             parent=self
         )
 
