@@ -216,13 +216,16 @@ class PlayerDBFrame(ttk.Frame):
         # pole ścieżki + przycisk Wczytaj + przeglądaj
         default_path = None
         try:
-            # preferowany plik domyślny
-            cand = Path("S45/Zawodnicy S45gpt.csv")
-            cand2 = Path("/mnt/data/Zawodnicy S45gpt.csv")
-            if cand.exists():
-                default_path = str(cand.resolve())
-            elif cand2.exists():
-                default_path = str(cand2.resolve())
+            _script_dir = Path(__file__).resolve().parent
+            candidates = [
+                Path("S51/Zawodnicy S51gpt.csv"),
+                _script_dir / "S51" / "Zawodnicy S51gpt.csv",
+                Path("/mnt/data/Zawodnicy S51gpt.csv"),
+            ]
+            for _cand in candidates:
+                if _cand.exists():
+                    default_path = str(_cand.resolve())
+                    break
         except Exception:
             default_path = None
 
@@ -295,7 +298,7 @@ class PlayerDBFrame(ttk.Frame):
         ttk.Separator(ops, orient="vertical").pack(side="left", fill="y", padx=8)
 
         ttk.Label(ops, text="Folder Klasyfikacje:").pack(side="left")
-        self._cls_dir_var = tk.StringVar(value="./S45/Klasyfikacje S45")
+        self._cls_dir_var = tk.StringVar(value="./S51/Klasyfikacje S51")
         ttk.Entry(ops, textvariable=self._cls_dir_var, width=28).pack(side="left", padx=(4,6))
         ttk.Button(ops, text="…", command=self._browse_cls_dir).pack(side="left", padx=(0,6))
 
@@ -441,7 +444,7 @@ class PlayerDBFrame(ttk.Frame):
             if want <= 0:
                 continue
             for sx in sexes:
-                # akceptuj: <TAG>-<M/W>__players.csv oraz *_<TAG>-<M/W>__players.csv (np. S45_WC-M__players.csv)
+                # akceptuj: <TAG>-<M/W>__players.csv oraz *_<TAG>-<M/W>__players.csv (np. S51_WC-M__players.csv)
                 pat1 = os.path.join(base_dir, f"{pref}-{sx}__players.csv")
                 pat2 = os.path.join(base_dir, f"*_{pref}-{sx}__players.csv")
                 matches = [p for p in (glob.glob(pat1) + glob.glob(pat2)) if os.path.isfile(p)]
@@ -1067,13 +1070,13 @@ class PlayerDBFrame(ttk.Frame):
             return
         current_path = Path(path_str)
 
-        # Szukamy numeru sezonu (np. S45 → 38)
+        # Szukamy numeru sezonu (np. S51 → 38)
         m = re.search(r"[Ss](\d+)", current_path.name)
         if not m:
             messagebox.showerror(
                 "Nowy sezon",
                 f"Nie mogę wykryć numeru sezonu z nazwy pliku:\n{current_path.name}\n"
-                "Oczekiwana konwencja: …S45….csv",
+                "Oczekiwana konwencja: …S51….csv",
                 parent=self
             )
             return

@@ -66,13 +66,13 @@ except Exception:
     except Exception as e:
         print(f"[DEBUG] Krytyczny błąd inicjalizacji flag: {e}")
 
-# === UNIWERSALNY WYSZUKIWACZ CSV: obsługa ./, folder pliku, ./S45/, ./S44/ ===
+# === UNIWERSALNY WYSZUKIWACZ CSV: obsługa ./, folder pliku, ./S51/, ./S51/ ===
 def _find_nearby_file(basename, alt_patterns=()):
     """
     Szuka pliku wg nazwy/wzorca w:
       - bieżącym katalogu,
       - folderze, w którym leży ten skrypt,
-      - podfolderach 'S45' i 'S44' (dla obu powyższych).
+      - podfolderach 'S51' i 'S51' (dla obu powyższych).
     Zwraca pełną ścieżkę (str) lub None.
     """
     from pathlib import Path
@@ -83,10 +83,10 @@ def _find_nearby_file(basename, alt_patterns=()):
         roots.append(Path(__file__).resolve().parent)
     except Exception:
         pass
-    # dodaj S45/ i S44/
+    # dodaj S51/ i S51/
     extra = []
     for r in list(roots):
-        extra.extend([r / "S45", r / "S44"])
+        extra.extend([r / "S51", r / "S51"])
     roots = [p for p in (roots + extra) if p.exists()]
 
     # jeżeli dostał już istniejącą ścieżkę — oddaj
@@ -122,9 +122,9 @@ def _find_nearby_file(basename, alt_patterns=()):
                 except Exception:
                     continue
 
-    # 3) rekursja tylko w S45/S44 (gdy ktoś zrobił dodatkowe podfoldery)
+    # 3) rekursja tylko w S51/S51 (gdy ktoś zrobił dodatkowe podfoldery)
     for r in roots:
-        if r.name.upper() in {"S45", "S44"} and r.is_dir():
+        if r.name.upper() in {"S51", "S51"} and r.is_dir():
             for pat in patterns:
                 try:
                     for f in r.rglob(pat):
@@ -167,13 +167,13 @@ def _read_tab_any(path):
 
 def _countries_with_min_healthy_mw(min_m: int = 4, min_w: int = 4) -> set[str]:
     """
-    Z pliku Zawodnicy S45gpt.csv zwraca kody krajów (Kraj),
+    Z pliku Zawodnicy S51gpt.csv zwraca kody krajów (Kraj),
     które mają co najmniej `min_m` zdrowych MEN i `min_w` zdrowych WOMEN
     (zdrowy = Kontuzja <= 0 lub NaN).
     """
     path = _find_nearby_file(
-        "Zawodnicy S45gpt.csv",
-        alt_patterns=["*Zawodnicy* S45*.csv", "*Zawodnicy*.csv"],
+        "Zawodnicy S51gpt.csv",
+        alt_patterns=["*Zawodnicy* S51*.csv", "*Zawodnicy*.csv"],
     )
     if not path:
         print("DEBUG CC: nie znaleziono pliku zawodników")
@@ -381,8 +381,8 @@ def _cc_q_summary_from_dir(dir_path):
 def _msc_q_summary_from_dir(dir_path, sex: str):
     """
     Czyta kwalifikacje MSC z katalogu dir_path:
-      S45_Q_MSC_M.csv  (dla sex='M')
-      S45_Q_MSC_W.csv  (dla sex='W')
+      S51_Q_MSC_M.csv  (dla sex='M')
+      S51_Q_MSC_W.csv  (dla sex='W')
 
     Zwraca DataFrame:
       Lp., Drużyna, Kraj, Punkty, Suma
@@ -399,7 +399,7 @@ def _msc_q_summary_from_dir(dir_path, sex: str):
     if not dir_path.is_dir():
         raise RuntimeError(f"Folder nie istnieje: {dir_path}")
 
-    fname = f"S45_Q_MSC_{suffix}.csv"
+    fname = f"S51_Q_MSC_{suffix}.csv"
     path = dir_path / fname
 
     if not path.is_file():
@@ -951,6 +951,8 @@ def populate_player_rows_with_flags(tv: ttk.Treeview, df, name_col="Zawodnik", k
     # czyść tabelę i referencje do obrazków
     for iid in tv.get_children(""):
         tv.delete(iid)
+    if not hasattr(tv, "img_refs"):
+        tv.img_refs = []
     tv.img_refs[:] = []
 
     if df is None or getattr(df, "empty", True):
@@ -1118,7 +1120,7 @@ def _export_team_champs_results(season: str, code: str):
     import pandas as pd
 
     # 1. Przygotowanie parametrów
-    season = (season or "S45").strip() or "S45"
+    season = (season or "S51").strip() or "S51"
     code = (code or "").strip().upper()
 
     if not code:
@@ -1240,6 +1242,7 @@ def simulate_team_competition_ext(
     style_fall_penalty: float | None = None,
     fall_base: float | None = None,
     fall_distance_gain: float | None = None,
+    ability_scale: float = 100.0,
 ):
     if meter_value is None:
         meter_value = compute_meter_value(K)
@@ -1265,6 +1268,7 @@ def simulate_team_competition_ext(
             "wind_takeoff_gain": wind_takeoff_gain,
             "wind_flight_gain": wind_flight_gain,
             "judges_rho": judges_rho,
+            "ability_scale": ability_scale,
             "max_sigma": max_sigma,
             "style_fall_penalty": style_fall_penalty,
             "fall_base": fall_base,
@@ -1474,7 +1478,7 @@ class CountrySelectFrame(ttk.Frame):
             variable=self.use_db_filters
         ).pack(side="left", padx=(12,0))
 
-        self.season_var = tk.StringVar(value="S45")
+        self.season_var = tk.StringVar(value="S51")
         ttk.Label(bar, text="Sezon:").pack(side="left", padx=(14,2))
         ttk.Entry(bar, textvariable=self.season_var, width=5).pack(side="left")
 
@@ -1566,11 +1570,11 @@ class CountrySelectFrame(ttk.Frame):
         import pandas as pd
         from pathlib import Path
 
-        # sezon z comboboxa; fallback na S45
+        # sezon z comboboxa; fallback na S51
         season_var = getattr(self, "season_var", None)
-        season = season_var.get().strip() if season_var is not None else "S45"
+        season = season_var.get().strip() if season_var is not None else "S51"
         if not season:
-            season = "S45"
+            season = "S51"
 
         cls_dir = Path(f"./{season}/Klasyfikacje {season}")
         cls_dir.mkdir(parents=True, exist_ok=True)
@@ -1669,7 +1673,7 @@ class CountrySelectFrame(ttk.Frame):
     def _btn_cc_groups(self):
         """
         CC - Groups:
-        • czyta kwalifikacje CC (S45_Q_CC_M/W/X.csv) z folderu {Sezon}/Team {Sezon}
+        • czyta kwalifikacje CC (S51_Q_CC_M/W/X.csv) z folderu {Sezon}/Team {Sezon}
         • sumuje MEN/WOMEN/MIX → Suma
         • bierze TOP16 po Suma
         • przenosi kraje z tej szesnastki z lewej tabeli do prawej
@@ -1677,7 +1681,7 @@ class CountrySelectFrame(ttk.Frame):
         from pathlib import Path
 
         # sezon z dolnego paska ("Sezon:" w zakładce Kraje)
-        season = (self.season_var.get() or "").strip() or "S45"
+        season = (self.season_var.get() or "").strip() or "S51"
         dir_path = Path(season) / f"Team {season}"
 
         if not dir_path.is_dir():
@@ -1806,13 +1810,19 @@ class CountrySelectFrame(ttk.Frame):
         from tkinter import messagebox
 
         # sezon tak jak w reszcie zakładki 'Kraje'
-        season = (self.season_var.get() or "").strip() or "S45"
+        season = (self.season_var.get() or "").strip() or "S51"
         dir_path = Path(season) / f"Team {season}"
 
         try:
             df_q = _msc_q_summary_from_dir(dir_path, sex=sex)
         except Exception as e:
-            print(f"[MSC-Q] Brak pliku kwalifikacji ({sex}): {e}")
+            try:
+                messagebox.showerror(
+                    "MSC – Q",
+                    f"Błąd przy wczytywaniu kwalifikacji MSC ({sex}): {e}"
+                )
+            except Exception:
+                pass
             return
 
         if df_q is None or getattr(df_q, "empty", True):
@@ -2440,7 +2450,7 @@ def build_gui(parent):
 
     def _apply_injury_updates_to_db(event_name: str, week_val: int):
         import pandas as pd
-        from tkinter import filedialog, messagebox
+        from tkinter import messagebox
 
         falls_df = getattr(self, "_falls_last_df", None)
         falls_agg = getattr(self, "_falls_last_agg", None)
@@ -2493,14 +2503,20 @@ def build_gui(parent):
             week_val = int(week_val)
         except Exception:
             week_val = 0
-        falls_agg["ReturnWeek"] = week_val + weeks
+        # +1: nawet "0 tygodni kontuzji" oznacza pauzę w kolejnym tygodniu
+        # (week_val=24, weeks=0 -> 25; week_val=24, weeks=3 -> 28)
+        falls_agg["ReturnWeek"] = week_val + weeks + 1
 
-        # Wybór pliku bazy zawodników
-        path = filedialog.askopenfilename(
-            title="Wybierz plik bazy zawodników do aktualizacji",
-            filetypes=[("CSV", "*.csv"), ("Excel", "*.xlsx *.xls"), ("Wszystkie pliki", "*.*")]
+        # Automatyczne wyszukanie pliku bazy zawodników (bez okna wyboru/potwierdzenia)
+        path = _find_nearby_file(
+            "Zawodnicy S51gpt.csv",
+            alt_patterns=["*Zawodnicy* S51*.csv", "*Zawodnicy*.csv"],
         )
         if not path:
+            messagebox.showerror(
+                "Aktualizacja bazy",
+                "Nie znaleziono pliku bazy zawodników (np. 'Zawodnicy S51gpt.csv')."
+            )
             return
 
         def _read_any(p):
@@ -2617,11 +2633,11 @@ def build_gui(parent):
             )
             return
 
-        # LOG: Kontuzje S45.csv obok bazy
+        # LOG: Kontuzje S51.csv obok bazy
         try:
             import os as _os
             log_dir = _os.path.dirname(path) or "."
-            log_path = _os.path.join(log_dir, "Kontuzje S45.csv")
+            log_path = _os.path.join(log_dir, "Kontuzje S51.csv")
 
             # baza: tylko realne kontuzje
             base = falls_agg.copy()
@@ -2672,7 +2688,7 @@ def build_gui(parent):
         top = tk.Toplevel(parent)
         top.title("Aktualizacja bazy po upadkach (TEAM)")
 
-        ttk.Label(top, text="Nazwa zawodów (np. S45_WC-M_TEAM):")\
+        ttk.Label(top, text="Nazwa zawodów (np. S51_WC-M_TEAM):")\
             .grid(row=0, column=0, sticky="w", padx=8, pady=(8, 4))
         e_event = ttk.Entry(top, width=32)
         e_event.grid(row=0, column=1, sticky="w", padx=8, pady=(8, 4))
@@ -2727,12 +2743,12 @@ def build_gui(parent):
     self._open_injury_update_dialog = _open_injury_update_dialog
 
     # --- MSC: folder z wynikami kwalifikacji MSC ---
-    self.msc_m_dir_var = tk.StringVar(master=root, value="./S45/Team S45")
-    self.msc_w_dir_var = tk.StringVar(master=root, value="./S45/Team S45")
+    self.msc_m_dir_var = tk.StringVar(master=root, value="./S51/Team S51")
+    self.msc_w_dir_var = tk.StringVar(master=root, value="./S51/Team S51")
 
 
     # ======= ZMIENNE =======
-    excel_path = tk.StringVar(master=root, value="C:/Users/ARZEt/Desktop/Nowy folder (2)/Team S44.xlsx")
+    excel_path = tk.StringVar(master=root, value="C:/Users/ARZEt/Desktop/Nowy folder (2)/Team S51.xlsx")
     sheet_name = tk.StringVar(master=root, value="Arkusz2")
     hill_name = tk.StringVar(master=root, value="Zakopane")
     k_value = tk.StringVar(master=root, value="125")
@@ -2741,8 +2757,9 @@ def build_gui(parent):
     wind_mean_value = tk.StringVar(master=root, value="0.0")
     wind_sd_value = tk.StringVar(master=root, value="0.8")
     gate_value = tk.StringVar(master=root, value="10")
-    randomness_value = tk.StringVar(master=root, value="0.35")
-    elite_regress_value = tk.StringVar(master=root, value="1.0")
+    randomness_value = tk.StringVar(master=root, value="1.5")
+    elite_regress_value = tk.StringVar(master=root, value="1.5")
+    ability_scale_value = tk.DoubleVar(master=root, value=100.0)
 
     gate_pts_step = tk.DoubleVar(master=root, value=4.0)
     p_gate_change = tk.DoubleVar(master=root, value=0.06)
@@ -2878,7 +2895,7 @@ def build_gui(parent):
 
     from pathlib import Path as _PathSwiss
 
-    swiss_dir_var = tk.StringVar(master=root, value=str(_PathSwiss("S45/Team S45")))
+    swiss_dir_var = tk.StringVar(master=root, value=str(_PathSwiss("S51/Team S51")))
 
     # --- górny pasek SWISS (folder + przyciski) ---
     frame_swiss_top = ttk.Frame(tab_swiss_rounds)
@@ -2889,7 +2906,7 @@ def build_gui(parent):
         .pack(side="left", padx=(4, 4))
 
     def _swiss_browse():
-        p = filedialog.askdirectory(title="Wybierz folder SWISS (S45/Team S45)")
+        p = filedialog.askdirectory(title="Wybierz folder SWISS (S51/Team S51)")
         if p:
             swiss_dir_var.set(p)
 
@@ -2949,7 +2966,7 @@ def build_gui(parent):
 
     ttk.Button(
         frame_swiss_update,
-        text="Zapisz do S45_SWISS.csv",
+        text="Zapisz do S51_SWISS.csv",
         command=lambda: _swiss_update_from_results(swiss_comp_var.get()),
     ).pack(side="left", padx=(4, 4))
 
@@ -3059,10 +3076,10 @@ def build_gui(parent):
     # zbuduj zakładkę „Klasyfikacja”
     _build_swiss_classif_tab(tab_swiss_classif)
 
-    # --- Q: łączna tabela CC z plików S45_Q_CC_M/W/X ---
+    # --- Q: łączna tabela CC z plików S51_Q_CC_M/W/X ---
     from pathlib import Path
 
-    cc_dir_var = tk.StringVar(master=root, value=str(Path("S45/Team S45")))
+    cc_dir_var = tk.StringVar(master=root, value="./S51/Team S51")
 
     # górny pasek (folder + odśwież)
     frame_q_top = ttk.Frame(tab_cc_q)
@@ -3311,7 +3328,7 @@ def build_gui(parent):
         return None
 
     def _cc_read_q_csv_any(path: Path) -> pd.DataFrame:
-        """Bezpieczne wczytanie pliku S45_Q_CC_*.csv (różne separatory/kodowania)."""
+        """Bezpieczne wczytanie pliku S51_Q_CC_*.csv (różne separatory/kodowania)."""
         last_err = None
         for enc in ("utf-8-sig", "utf-8", "cp1250", "latin-1"):
             try:
@@ -3351,14 +3368,14 @@ def build_gui(parent):
     def _cc_q_summary_from_dir(dir_path: Path) -> pd.DataFrame:
         """
         Czyta:
-        S45_Q_CC_M.csv, S45_Q_CC_W.csv, S45_Q_CC_X.csv
+        S51_Q_CC_M.csv, S51_Q_CC_W.csv, S51_Q_CC_X.csv
         i buduje tabelę:
         Lp., Drużyna, Kraj, MEN, WOMEN, MIX, Suma
         """
         data = {}  # (team, nat) -> {"MEN":..., "WOMEN":..., "MIX":...}
 
         for suffix, col_name in (("M", "MEN"), ("W", "WOMEN"), ("X", "MIX")):
-            p = dir_path / f"S45_Q_CC_{suffix}.csv"
+            p = dir_path / f"S51_Q_CC_{suffix}.csv"
             if not p.is_file():
                 continue
 
@@ -3415,7 +3432,7 @@ def build_gui(parent):
         """
         Losuje grupy A–D z TOP16 z kwalifikacji MSC (dla danej płci)
         i zapisuje:
-          S45_MSC_<sex>_Grupa_A.csv ... S45_MSC_<sex>_Grupa_D.csv
+          S51_MSC_<sex>_Grupa_A.csv ... S51_MSC_<sex>_Grupa_D.csv
         w wybranym folderze.
         """
         from tkinter import messagebox
@@ -3484,7 +3501,7 @@ def build_gui(parent):
                 })
 
         # zapis czterech plików dla danej płci:
-        # S45_MSC_M_Grupa_A.csv, ..., S45_MSC_W_Grupa_D.csv
+        # S51_MSC_M_Grupa_A.csv, ..., S51_MSC_W_Grupa_D.csv
         for g in group_labels:
             recs = []
             for lp, row in enumerate(groups[g], start=1):
@@ -3500,7 +3517,7 @@ def build_gui(parent):
                 recs,
                 columns=["Lp.", "Drużyna", "Kraj", "Punkty Zdobyte", "Punkty Stracone", "Minipunkty"],
             )
-            out_path = dir_path / f"S45_MSC_{sex}_Grupa_{g}.csv"
+            out_path = dir_path / f"S51_MSC_{sex}_Grupa_{g}.csv"
             try:
                 df_g.to_csv(out_path, sep=";", encoding="cp1250", index=False)
             except Exception:
@@ -3509,11 +3526,11 @@ def build_gui(parent):
         messagebox.showinfo(
             "MSC – grupy",
             f"Wylosowano grupy MSC-{sex} i zapisano:\n"
-            "S45_MSC_{sex}_Grupa_A.csv … S45_MSC_{sex}_Grupa_D.csv",
+            "S51_MSC_{sex}_Grupa_A.csv … S51_MSC_{sex}_Grupa_D.csv",
         )
 
     def _msc_groups_reload(sex: str):
-        """Wczytuje S45_MSC_<sex>_Grupa_A…D.csv i odświeża tabelki MSC."""
+        """Wczytuje S51_MSC_<sex>_Grupa_A…D.csv i odświeża tabelki MSC."""
         from pathlib import Path
         import pandas as pd
 
@@ -3529,7 +3546,7 @@ def build_gui(parent):
 
         for g, ft in group_map.items():
             ft.clear()
-            p = dir_path / f"S45_MSC_{sex}_Grupa_{g}.csv"
+            p = dir_path / f"S51_MSC_{sex}_Grupa_{g}.csv"
             if not p.is_file():
                 continue
             try:
@@ -3541,9 +3558,12 @@ def build_gui(parent):
             for col in cols:
                 if col not in df.columns:
                     if col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
-                        df[col] = 0
+                        df[col] = 0.0
                     else:
                         df[col] = ""
+            for col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0).astype(float)
             df = df[cols]
 
             for _, r in df.iterrows():
@@ -3736,12 +3756,12 @@ def build_gui(parent):
         try:
             df_q = _msc_q_summary_from_dir(dir_path, sex=sex)
         except Exception as e:
-            print(f"[MSC-Klasa] Brak pliku kwalifikacji ({sex}): {e}")
+            messagebox.showerror("MSC – Klasyfikacja", f"Problem z kwalifikacjami MSC:\n{e}")
             _msc_classif_redraw_canvas(sex, None)
             return
 
         if df_q is None or df_q.empty:
-            print(f"[MSC-Klasa] Brak danych kwalifikacji MSC ({sex}).")
+            messagebox.showwarning("MSC – Klasyfikacja", "Brak danych kwalifikacji MSC.")
             _msc_classif_redraw_canvas(sex, None)
             return
 
@@ -3755,7 +3775,7 @@ def build_gui(parent):
         q_order = {(r["Drużyna"], r["Kraj"]): idx for idx, r in df_q.iterrows()}
 
         # --- Puchar MSC ---
-        season = dir_path.parent.name if dir_path.parent.name else "S45"
+        season = dir_path.parent.name if dir_path.parent.name else "S51"
         cup_path = dir_path / f"{season}_MSC_{sex}_Puchar.csv"
 
         df_cup = None
@@ -3896,7 +3916,7 @@ def build_gui(parent):
             next_place += 1
 
         if not rows:
-            print("[MSC-Klasa] Nie udało się zbudować żadnej klasyfikacji MSC.")
+            messagebox.showwarning("MSC – Klasyfikacja", "Nie udało się zbudować żadnej klasyfikacji MSC.")
             _msc_classif_redraw_canvas(sex, None)
             return
 
@@ -3958,8 +3978,8 @@ def build_gui(parent):
 
         # --- zapis do CSV ---
         try:
-            # sezon = nazwa folderu nadrzędnego (np. S45)
-            season = dir_path.parent.name if dir_path.parent.name else "S45"
+            # sezon = nazwa folderu nadrzędnego (np. S51)
+            season = dir_path.parent.name if dir_path.parent.name else "S51"
             out_name = f"{season}_MSC_{sex}_Klasyfikacja.csv"
             out_path = dir_path / out_name
 
@@ -4179,8 +4199,8 @@ def build_gui(parent):
         dir_var = self.msc_m_dir_var if sex == "M" else self.msc_w_dir_var
         root = Path(dir_var.get().strip() or ".").resolve()
 
-        # sezon = nazwa folderu nadrzędnego (np. S45)
-        season = root.parent.name if root.parent.name else "S45"
+        # sezon = nazwa folderu nadrzędnego (np. S51)
+        season = root.parent.name if root.parent.name else "S51"
         path = root / f"{season}_MSC_{sex}_Puchar.csv"
 
         if not path.is_file():
@@ -4414,7 +4434,7 @@ def build_gui(parent):
             messagebox.showerror("MSC – Puchar", f"Folder MSC nie istnieje:\n{dir_path}")
             return
 
-        season = dir_path.parent.name if dir_path.parent.name else "S45"
+        season = dir_path.parent.name if dir_path.parent.name else "S51"
 
         groups_ranked: dict[tuple[str, int], dict] = {}
         missing: list[str] = []
@@ -4560,7 +4580,7 @@ def build_gui(parent):
             return
 
         dir_path = Path(dir_str.strip() or ".").resolve()
-        season = dir_path.parent.name if dir_path.parent.name else "S45"
+        season = dir_path.parent.name if dir_path.parent.name else "S51"
         p = dir_path / f"{season}_MSC_{sex}_Puchar.csv"
         if not p.is_file():
             messagebox.showerror("MSC – Puchar", f"Brak pliku drabinki:\n{p}")
@@ -4829,7 +4849,7 @@ def build_gui(parent):
         df_q.rename(columns={"Punkty": "Pkt_Q"}, inplace=True)
 
         # --- 2) Punkty z Pucharu MSC ---
-        season = root_dir.parent.name or "S45"
+        season = root_dir.parent.name or "S51"
         cup_path = root_dir / f"{season}_MSC_{sex}_Puchar.csv"
 
         cup_parts = []
@@ -4903,7 +4923,7 @@ def build_gui(parent):
     def _cc_draw_groups_for_dir(dir_str: str):
         """
         Losuje grupy A–D z TOP16 z kwalifikacji CC i zapisuje:
-        S45_CC_Grupa_A.csv ... S45_CC_Grupa_D.csv
+        S51_CC_Grupa_A.csv ... S51_CC_Grupa_D.csv
         w wybranym folderze.
         """
         from tkinter import messagebox
@@ -4978,7 +4998,7 @@ def build_gui(parent):
                     "Minipunkty": 0,
                 })
             df_g = pd.DataFrame(recs, columns=["Lp.", "Drużyna", "Kraj", "Punkty Zdobyte", "Punkty Stracone", "Minipunkty"])
-            out_path = dir_path / f"S45_CC_Grupa_{g}.csv"
+            out_path = dir_path / f"S51_CC_Grupa_{g}.csv"
             try:
                 df_g.to_csv(out_path, sep=";", encoding="cp1250", index=False)
             except Exception:
@@ -4988,7 +5008,7 @@ def build_gui(parent):
         messagebox.showinfo(
             "CC – grupy",
             "Wylosowano grupy CC i zapisano:\n"
-            "S45_CC_Grupa_A.csv … S45_CC_Grupa_D.csv",
+            "S51_CC_Grupa_A.csv … S51_CC_Grupa_D.csv",
         )
 
     def _cc_collect_groups():
@@ -5090,7 +5110,7 @@ def build_gui(parent):
             )    
 
     def _cc_groups_reload():
-        """Wczytuje S45_CC_Grupa_A…D.csv z folderu CC i odświeża tabelki."""
+        """Wczytuje S51_CC_Grupa_A…D.csv z folderu CC i odświeża tabelki."""
         dir_path = Path(cc_dir_var.get().strip() or ".")
         cols = ["Lp.", "Drużyna", "Kraj", "Punkty Zdobyte", "Punkty Stracone", "Minipunkty"]
 
@@ -5098,7 +5118,7 @@ def build_gui(parent):
             # wyczyść tabelę
             ft.clear()
 
-            p = dir_path / f"S45_CC_Grupa_{g}.csv"
+            p = dir_path / f"S51_CC_Grupa_{g}.csv"
             if not p.is_file():
                 continue
 
@@ -5129,9 +5149,9 @@ def build_gui(parent):
     def _cc_q_reload():
         """
         Czyta:
-          S45/Team S45/S45_Q_CC_M.csv
-          S45/Team S45/S45_Q_CC_W.csv
-          S45/Team S45/S45_Q_CC_X.csv
+          S51/Team S51/S51_Q_CC_M.csv
+          S51/Team S51/S51_Q_CC_W.csv
+          S51/Team S51/S51_Q_CC_X.csv
         i buduje tabelę:
           Lp., Drużyna, Kraj, MEN, WOMEN, MIX, Suma
         """
@@ -5143,10 +5163,10 @@ def build_gui(parent):
         data = {}  # (Drużyna,Kraj) -> dict
 
         def _load_one(suffix: str, col_name: str):
-            fname = f"S45_Q_CC_{suffix}.csv"
+            fname = f"S51_Q_CC_{suffix}.csv"
             p = dir_path / fname
             if not p.exists():
-                # fallback: glob po wzorcu (obsługuje np. S45_Q_CC_M_wyniki.csv)
+                # fallback: glob po wzorcu (obsługuje np. S51_Q_CC_M_wyniki.csv)
                 candidates = sorted(dir_path.glob(f"*_Q_CC_{suffix}*.csv"))
                 if candidates:
                     p = candidates[0]
@@ -5419,7 +5439,7 @@ def build_gui(parent):
     def _cc_build_cup_from_groups(dir_str: str):
         """
         Buduje drabinkę pucharową 1–16 na podstawie plików:
-          S45_CC_Grupa_A…D.csv
+          S51_CC_Grupa_A…D.csv
 
         Struktura:
           M1:  1A – 2B   (QF)
@@ -5460,7 +5480,7 @@ def build_gui(parent):
         missing = []
 
         for g in ("A", "B", "C", "D"):
-            p = dir_path / f"S45_CC_Grupa_{g}.csv"
+            p = dir_path / f"S51_CC_Grupa_{g}.csv"
             if not p.is_file():
                 missing.append(str(p))
                 continue
@@ -5573,7 +5593,7 @@ def build_gui(parent):
             "Drużyna2", "Kraj2", "Punkty2", "Minipunkty2",
         ])
 
-        out_path = dir_path / "S45_CC_Puchar.csv"
+        out_path = dir_path / "S51_CC_Puchar.csv"
         try:
             df_cup.to_csv(out_path, sep=";", encoding="cp1250", index=False)
         except Exception:
@@ -5596,8 +5616,8 @@ def build_gui(parent):
 
         root = Path(cc_dir_var.get().strip() or ".").resolve()
 
-        # znajdź folder sezonu (np. S45) automatycznie
-        season = root.parent.name   # da "S45"
+        # znajdź folder sezonu (np. S51) automatycznie
+        season = root.parent.name   # da "S51"
 
         path = root / f"{season}_CC_Puchar.csv"
 
@@ -5659,7 +5679,7 @@ def build_gui(parent):
 
     def _cc_cup_apply_results(dir_str: str):
         """
-        Czyta S45_CC_Puchar.csv, wyznacza zwycięzców/przegranych
+        Czyta S51_CC_Puchar.csv, wyznacza zwycięzców/przegranych
         i uzupełnia kolejne rundy:
           M5, M6  ← Zw. M1..M4
           M7, M8  ← Zw./Prz. M5..M6
@@ -5671,7 +5691,7 @@ def build_gui(parent):
         from tkinter import messagebox
 
         dir_path = Path(dir_str.strip() or ".")
-        p = dir_path / "S45_CC_Puchar.csv"
+        p = dir_path / "S51_CC_Puchar.csv"
         if not p.is_file():
             messagebox.showerror(
                 "CC – Puchar",
@@ -6216,10 +6236,11 @@ def build_gui(parent):
         q_frame.pack(fill="both", expand=True)
 
         def _reload_q():
+            from tkinter import messagebox
             try:
                 df = _msc_q_summary_from_dir(dir_var.get().strip() or ".", sex=sex)
             except Exception as e:
-                print(f"[MSC-Q] Brak pliku kwalifikacji ({sex}): {e}")
+                messagebox.showerror("Błąd MSC-Q", str(e))
                 return
             q_frame.populate_from_df(df)
 
@@ -6316,7 +6337,7 @@ def build_gui(parent):
 
 
     def _load_hills_csv_team():
-        resolved = _find_nearby_file("Skocznie S45.csv", alt_patterns=["*Skocznie* S45*.csv"])
+        resolved = _find_nearby_file("Skocznie S51.csv", alt_patterns=["*Skocznie* S51*.csv"])
         if not resolved:
             return
         path = Path(resolved)
@@ -6424,6 +6445,7 @@ def build_gui(parent):
     add_row(left, "Belka bazowa:", gate_value, width=8)
     add_row(left, "Losowość:", randomness_value, width=8)
     add_row(left, "Regresja elit:", elite_regress_value, width=8)
+    add_row(left, "Skala UM/Formy:", ability_scale_value, width=8)
 
     ttk.Separator(left, orient="horizontal").grid(row=left.grid_size()[1], column=0, columnspan=3, sticky="ew", pady=(6,6))
     ttk.Label(left, text="Belka / Wiatr / Sędziowie", font=("TkDefaultFont", 10, "bold")).grid(row=left.grid_size()[1], column=0, columnspan=3, sticky="w")
@@ -6463,6 +6485,7 @@ def build_gui(parent):
             "wind_mean": wind_mean_value.get(), "wind_sd": wind_sd_value.get(),
             "gate": gate_value.get(), "randomness": randomness_value.get(),
             "elite_regress": elite_regress_value.get(),
+            "ability_scale": ability_scale_value.get(),
             "gate_points_per_step": gate_pts_step.get(), "p_gate_change": p_gate_change.get(),
             "max_gate_delta": max_gate_delta.get(), "wind_phi": wind_phi.get(),
             "wind_takeoff_gain": wind_takeoff_gain.get(), "wind_flight_gain": wind_flight_gain.get(),
@@ -6475,6 +6498,216 @@ def build_gui(parent):
         run_simulation()
 
     ttk.Button(tab_params, text="Start symulacji", command=run_and_save_config).grid(row=1, column=0, pady=(0,8))
+
+    # --- TEAM WEEK: combobox tygodnia + przycisk ---
+    frame_team_week = ttk.LabelFrame(tab_params, text="Rozegraj TEAM WEEK")
+    frame_team_week.grid(row=2, column=0, pady=(4, 8), padx=8, sticky="ew")
+
+    ttk.Label(frame_team_week, text="Tydzień:").pack(side="left", padx=(8, 4))
+    _team_week_var = tk.StringVar(value="8")
+    cmb_team_week = ttk.Combobox(
+        frame_team_week,
+        textvariable=_team_week_var,
+        values=("4", "8", "12", "16", "20", "24", "28", "33"),
+        width=5,
+        state="readonly",
+    )
+    cmb_team_week.pack(side="left", padx=(0, 12))
+
+    # Mapowanie tygodnia → runda CC/MSC (None = brak CC/MSC w tym tygodniu)
+    _WEEK_TO_CC_ROUND = {
+        "4": None, "8": "1", "12": "2", "16": "3",
+        "20": "1/4", "24": "1/2", "28": "Finał", "33": None,
+    }
+    # Mapowanie tygodnia → numer rundy SWISS
+    _WEEK_TO_SWISS_ROUND = {
+        "4": 1, "8": 2, "12": 3, "16": 4,
+        "20": 5, "24": 6, "28": 7, "33": 8,
+    }
+
+    def _run_team_week():
+        """Automatyzuje pełny TEAM WEEK: CC (M/W/MIX) + MSC-M + MSC-W + SWISS (M/W/MIX)."""
+        import time
+        from tkinter import messagebox
+
+        week = _team_week_var.get().strip()
+        cc_round = _WEEK_TO_CC_ROUND.get(week)
+        swiss_round_num = _WEEK_TO_SWISS_ROUND.get(week)
+
+        if not messagebox.askyesno(
+            "Rozegraj TEAM WEEK",
+            f"Tydzień {week}:\n"
+            + (f"• CC: kolejka/faza '{cc_round}' (M, W, MIX)\n" if cc_round else "• CC: pominięte\n")
+            + (f"• MSC-MEN/WOMEN: kolejka '{cc_round}'\n" if cc_round else "• MSC: pominięte\n")
+            + f"• SWISS: runda {swiss_round_num} (M, W, MIX)\n\n"
+            "Kontynuować?"
+        ):
+            return
+
+        errors = []
+
+        def _sim():
+            """Uruchamia symulację synchronicznie (bez zapisu konfiguracji)."""
+            run_simulation()
+
+        def _switch_sex(sex):
+            country_frame.sex_var.set(sex)
+            try:
+                country_frame._on_filter_change()
+            except Exception:
+                pass
+
+        def _select_swiss_row(runda_num):
+            """Zaznacza pierwszy wiersz danej rundy w tv_swiss_rounds."""
+            for iid in tv_swiss_rounds.get_children():
+                vals = tv_swiss_rounds.item(iid, "values")
+                if vals:
+                    try:
+                        r = int(float(str(vals[0])))
+                    except Exception:
+                        continue
+                    if r == runda_num:
+                        tv_swiss_rounds.selection_set(iid)
+                        tv_swiss_rounds.focus(iid)
+                        return True
+            return False
+
+        # ================================================================
+        # CC (pomijamy w tygodniach 4 i 33)
+        # ================================================================
+        if cc_round:
+            # --- CC MEN ---
+            try:
+                country_frame._clear()
+                country_frame._btn_cc_groups()
+                _switch_sex("M")
+                _sim()
+                _cc_round_var.set(cc_round)
+                _cc_update_any_from_results()
+            except Exception as e:
+                errors.append(f"CC MEN: {e}")
+
+            # --- CC WOMEN ---
+            try:
+                _switch_sex("W")
+                _sim()
+                _cc_round_var.set(cc_round)
+                _cc_update_any_from_results()
+            except Exception as e:
+                errors.append(f"CC WOMEN: {e}")
+
+            # --- CC MIX ---
+            try:
+                _switch_sex("MIX")
+                _sim()
+                _cc_round_var.set(cc_round)
+                _cc_update_any_from_results()
+            except Exception as e:
+                errors.append(f"CC MIX: {e}")
+
+        # ================================================================
+        # MSC-MEN (pomijamy w tygodniach 4 i 33)
+        # ================================================================
+        if cc_round:
+            try:
+                country_frame._clear()
+                country_frame._btn_msc_men()
+                _switch_sex("M")
+                _sim()
+                _msc_m_round_var.set(cc_round)
+                _msc_update_any_from_results("M", cc_round)
+            except Exception as e:
+                errors.append(f"MSC-MEN: {e}")
+
+        # ================================================================
+        # MSC-WOMEN (pomijamy w tygodniach 4 i 33)
+        # ================================================================
+        if cc_round:
+            try:
+                country_frame._clear()
+                country_frame._btn_msc_women()
+                _switch_sex("W")
+                _sim()
+                _msc_w_round_var.set(cc_round)
+                _msc_update_any_from_results("W", cc_round)
+            except Exception as e:
+                errors.append(f"MSC-WOMEN: {e}")
+
+        # ================================================================
+        # SWISS (wszystkie tygodnie)
+        # ================================================================
+        if swiss_round_num:
+            # --- przygotuj listę krajów: wszyscy ---
+            try:
+                country_frame._clear()
+                country_frame._add()
+            except Exception as e:
+                errors.append(f"SWISS – ładowanie krajów: {e}")
+
+            # --- generuj rundę ---
+            try:
+                if swiss_round_num == 1:
+                    _swiss_generate_first_round_from_seed()
+                else:
+                    _swiss_generate_next_round()
+                _swiss_reload_matches()
+            except Exception as e:
+                errors.append(f"SWISS – generowanie rundy {swiss_round_num}: {e}")
+
+            # --- SWISS MEN ---
+            try:
+                _switch_sex("M")
+                _sim()
+                if not _select_swiss_row(swiss_round_num):
+                    errors.append(f"SWISS MEN: nie znaleziono rundy {swiss_round_num} w tabeli")
+                else:
+                    swiss_comp_var.set("MEN")
+                    _swiss_update_from_results("MEN")
+            except Exception as e:
+                errors.append(f"SWISS MEN: {e}")
+
+            # --- SWISS WOMEN ---
+            try:
+                _switch_sex("W")
+                _sim()
+                if not _select_swiss_row(swiss_round_num):
+                    errors.append(f"SWISS WOMEN: nie znaleziono rundy {swiss_round_num} w tabeli")
+                else:
+                    swiss_comp_var.set("WOMEN")
+                    _swiss_update_from_results("WOMEN")
+            except Exception as e:
+                errors.append(f"SWISS WOMEN: {e}")
+
+            # --- SWISS MIX ---
+            try:
+                _switch_sex("MIX")
+                _sim()
+                if not _select_swiss_row(swiss_round_num):
+                    errors.append(f"SWISS MIX: nie znaleziono rundy {swiss_round_num} w tabeli")
+                else:
+                    swiss_comp_var.set("MIXED")
+                    _swiss_update_from_results("MIXED")
+            except Exception as e:
+                errors.append(f"SWISS MIX: {e}")
+
+        # --- podsumowanie ---
+        if errors:
+            messagebox.showwarning(
+                "TEAM WEEK – zakończono z błędami",
+                f"Tydzień {week} zakończony.\n\nBłędy ({len(errors)}):\n"
+                + "\n".join(f"• {e}" for e in errors)
+            )
+        else:
+            messagebox.showinfo(
+                "TEAM WEEK – gotowe",
+                f"Tydzień {week} rozegrany pomyślnie!"
+            )
+
+    ttk.Button(
+        frame_team_week,
+        text="▶▶ Rozegraj TEAM WEEK",
+        command=_run_team_week,
+    ).pack(side="left", padx=(0, 8))
 
     # --- zakładki MSC (MEN / WOMEN) na głównym notebooku ---
     tab_msc_m = ttk.Frame(notebook_main)
@@ -6565,7 +6798,7 @@ def build_gui(parent):
     frame_update_cls.columnconfigure(10, weight=1)
 
     ttk.Label(frame_update_cls, text="Sezon:").grid(row=0, column=0, sticky="w")
-    _team_cls_season_var = tk.StringVar(value="S45")
+    _team_cls_season_var = tk.StringVar(value="S51")
     ttk.Entry(frame_update_cls, textvariable=_team_cls_season_var, width=6).grid(row=0, column=1, padx=(4,12))
 
     ttk.Label(frame_update_cls, text="Cykl (np. WC-M):").grid(row=0, column=2, sticky="w")
@@ -6602,7 +6835,7 @@ def build_gui(parent):
     frame_champs.columnconfigure(10, weight=1)
 
     ttk.Label(frame_champs, text="Mistrzostwa – sezon:").grid(row=0, column=0, sticky="w")
-    _team_ch_season_var = tk.StringVar(value="S45")
+    _team_ch_season_var = tk.StringVar(value="S51")
     ttk.Entry(frame_champs, textvariable=_team_ch_season_var, width=6)\
         .grid(row=0, column=1, padx=(4,12))
 
@@ -6718,8 +6951,8 @@ def build_gui(parent):
     def _swiss_read_matches_from_dir(dir_path):
         """
         Czyta wszystkie mecze SWISS z pliku:
-            S45_SWISS.csv
-        w katalogu dir_path (np. ./S45/Team S45).
+            S51_SWISS.csv
+        w katalogu dir_path (np. ./S51/Team S51).
 
         Zwraca DataFrame z kolumnami:
         Runda;Mecz;Drużyna1;Kraj1;PktM1;Minipunkty1;MinipunktyM1;MinipunktyW1;MinipunktyX1;
@@ -6729,7 +6962,7 @@ def build_gui(parent):
         from pathlib import Path as _Path
 
         dir_str = str(dir_path).strip() or "."
-        p = _Path(dir_str) / "S45_SWISS.csv"
+        p = _Path(dir_str) / "S51_SWISS.csv"
         if not p.is_file():
             print(f"[SWISS] Brak pliku z rundami: {p}")
             return _pd.DataFrame(
@@ -6760,7 +6993,7 @@ def build_gui(parent):
         ]
         missing = [c for c in expected if c not in df.columns]
         if missing:
-            raise RuntimeError(f"[SWISS] Brak kolumn w S45_SWISS.csv: {', '.join(missing)}")
+            raise RuntimeError(f"[SWISS] Brak kolumn w S51_SWISS.csv: {', '.join(missing)}")
 
         # bezpieczne typy liczbowe + wyliczenie Minipunkty1/2 jeśli ktoś ich nie podał
         def _to_float(v):
@@ -6946,9 +7179,9 @@ def build_gui(parent):
 
     def _swiss_generate_first_round_from_seed():
         """
-        Czyta S45_SWISS_Seed.csv z katalogu SWISS (domyślnie ./S45/Team S45),
+        Czyta S51_SWISS_Seed.csv z katalogu SWISS (domyślnie ./S51/Team S51),
         układa 1. rundę (parowanie top half vs bottom half wg Lp.)
-        i zapisuje S45_SWISS.csv z pustymi punktami.
+        i zapisuje S51_SWISS.csv z pustymi punktami.
         """
         from pathlib import Path as _Path
         from tkinter import messagebox
@@ -6956,7 +7189,7 @@ def build_gui(parent):
         nonlocal _swiss_classif_last_df
 
         dir_path = _Path(swiss_dir_var.get().strip() or ".")
-        seed_path = dir_path / "S45_SWISS_Seed.csv"
+        seed_path = dir_path / "S51_SWISS_Seed.csv"
 
         if not seed_path.is_file():
             messagebox.showerror("SWISS – seed", f"Brak pliku seedów:\n{seed_path}")
@@ -6988,7 +7221,7 @@ def build_gui(parent):
         if not lp_col or not team_col or not nat_col:
             messagebox.showerror(
                 "SWISS – seed",
-                "Plik S45_SWISS_Seed.csv musi mieć kolumny typu:\n"
+                "Plik S51_SWISS_Seed.csv musi mieć kolumny typu:\n"
                 "Lp.;Drużyna;Kraj (lub ich oczywiste warianty)."
             )
             return
@@ -7049,11 +7282,11 @@ def build_gui(parent):
             "Drużyna2","Kraj2","PktM2","Minipunkty2","MinipunktyM2","MinipunktyW2","MinipunktyX2",
         ])
 
-        out_path = dir_path / "S45_SWISS.csv"
+        out_path = dir_path / "S51_SWISS.csv"
         try:
             df_out.to_csv(out_path, sep=";", index=False, encoding="cp1250")
         except Exception as e:
-            messagebox.showerror("SWISS – seed", f"Nie udało się zapisać S45_SWISS.csv:\n{e}")
+            messagebox.showerror("SWISS – seed", f"Nie udało się zapisać S51_SWISS.csv:\n{e}")
             return
 
         # od razu przeładuj widok rund
@@ -7092,11 +7325,11 @@ def build_gui(parent):
     def _swiss_generate_next_round():
         """
         Generuje kolejną rundę SWISS na podstawie aktualnej klasyfikacji:
-        - bierze wszystkie rozegrane mecze z S45_SWISS.csv,
+        - bierze wszystkie rozegrane mecze z S51_SWISS.csv,
         - liczy tabelę (_swiss_compute_table),
         - sortuje wg PktM, Buchholza, Minipunktów (plus seed Lp., jeśli jest),
         - paruje 1–2, 3–4, 5–6 itd. z unikaniem rewanżów, jeśli to możliwe,
-        - dopisuje nową rundę (Runda = max(Runda)+1) do S45_SWISS.csv.
+        - dopisuje nową rundę (Runda = max(Runda)+1) do S51_SWISS.csv.
         """
         from pathlib import Path as _Path
         from tkinter import messagebox
@@ -7110,7 +7343,7 @@ def build_gui(parent):
             return
 
         if df_matches is None or df_matches.empty:
-            messagebox.showerror("SWISS – rundy", "Brak meczów w S45_SWISS.csv – najpierw utwórz 1. rundę.")
+            messagebox.showerror("SWISS – rundy", "Brak meczów w S51_SWISS.csv – najpierw utwórz 1. rundę.")
             return
 
         # ustal obecną rundę
@@ -7147,9 +7380,9 @@ def build_gui(parent):
             messagebox.showerror("SWISS – klasyfikacja", "Nie udało się zbudować tabeli SWISS.")
             return
 
-        # opcjonalny tie-break z seedów (Lp. z S45_SWISS_Seed.csv)
+        # opcjonalny tie-break z seedów (Lp. z S51_SWISS_Seed.csv)
         seed_lp = {}
-        seed_path = dir_path / "S45_SWISS_Seed.csv"
+        seed_path = dir_path / "S51_SWISS_Seed.csv"
         if seed_path.is_file():
             try:
                 df_seed = _read_tab_any(seed_path)
@@ -7302,13 +7535,13 @@ def build_gui(parent):
         # dopisz do istniejących meczów
         df_all = _pd.concat([df_matches, df_new], ignore_index=True)
 
-        out_path = dir_path / "S45_SWISS.csv"
+        out_path = dir_path / "S51_SWISS.csv"
         try:
             df_all.to_csv(out_path, sep=";", index=False, encoding="cp1250")
         except Exception as e:
             messagebox.showerror(
                 "SWISS – generowanie",
-                f"Nie udało się zapisać S45_SWISS.csv:\n{e}"
+                f"Nie udało się zapisać S51_SWISS.csv:\n{e}"
             )
             return
 
@@ -7329,7 +7562,7 @@ def build_gui(parent):
         )
 
     def _swiss_reload_matches():
-        """Odświeża tabelę rund SWISS na podstawie S45_SWISS.csv."""
+        """Odświeża tabelę rund SWISS na podstawie S51_SWISS.csv."""
         import pandas as _pd
         from pathlib import Path as _Path
         from tkinter import messagebox
@@ -7363,7 +7596,7 @@ def build_gui(parent):
 
     def _swiss_recompute_and_reload_table():
         """
-        Czyta S45_SWISS.csv, przelicza klasyfikację, zapisuje S45_SWISS_Table.csv
+        Czyta S51_SWISS.csv, przelicza klasyfikację, zapisuje S51_SWISS_Table.csv
         i odświeża tabelę w GUI.
         """
         import pandas as _pd
@@ -7389,7 +7622,7 @@ def build_gui(parent):
             return
 
         # zapis do CSV
-        out_path = dir_path / "S45_SWISS_Table.csv"
+        out_path = dir_path / "S51_SWISS_Table.csv"
         try:
             df_table.to_csv(out_path, sep=";", index=False, encoding="cp1250")
             print(f"[SWISS] Zapisano klasyfikację: {out_path}")
@@ -7510,8 +7743,8 @@ def build_gui(parent):
     def _swiss_export_classif_csv():
         """
         Eksportuje ostatnią klasyfikację SWISS do CSV:
-        S45_SWISS_Klasyfikacja.csv w tym samym folderze,
-        gdzie jest S45_SWISS_Table.csv (jeśli da się znaleźć).
+        S51_SWISS_Klasyfikacja.csv w tym samym folderze,
+        gdzie jest S51_SWISS_Table.csv (jeśli da się znaleźć).
         """
         import pandas as _pd
         from pathlib import Path as _Path
@@ -7528,7 +7761,7 @@ def build_gui(parent):
 
         # Spróbuj znaleźć tabelę, żeby wziąć folder
         table_path = _find_nearby_file(
-            "S45_SWISS_Table.csv",
+            "S51_SWISS_Table.csv",
             alt_patterns=["*SWISS_Table*.csv"]
         )
         if table_path:
@@ -7536,7 +7769,7 @@ def build_gui(parent):
         else:
             out_dir = _Path(".").resolve()
 
-        out_path = out_dir / "S45_SWISS_Klasyfikacja.csv"
+        out_path = out_dir / "S51_SWISS_Klasyfikacja.csv"
 
         try:
             _swiss_classif_last_df.to_csv(
@@ -7646,16 +7879,16 @@ def build_gui(parent):
             )
             return
 
-        # wczytaj pełny S45_SWISS.csv
+        # wczytaj pełny S51_SWISS.csv
         dir_path = _Path(swiss_dir_var.get().strip() or ".")
-        p = dir_path / "S45_SWISS.csv"
+        p = dir_path / "S51_SWISS.csv"
         if not p.is_file():
-            messagebox.showerror("SWISS – wyniki", f"Brak pliku S45_SWISS.csv w folderze:\n{dir_path}")
+            messagebox.showerror("SWISS – wyniki", f"Brak pliku S51_SWISS.csv w folderze:\n{dir_path}")
             return
 
         df = _swiss_read_matches_from_dir(dir_path)
         if df is None or df.empty:
-            messagebox.showerror("SWISS – wyniki", "Plik S45_SWISS.csv jest pusty lub uszkodzony.")
+            messagebox.showerror("SWISS – wyniki", "Plik S51_SWISS.csv jest pusty lub uszkodzony.")
             return
 
         # wybierz wszystkie mecze z danej rundy
@@ -7665,12 +7898,14 @@ def build_gui(parent):
         if len(idx_round) == 0:
             messagebox.showerror(
                 "SWISS – wyniki",
-                f"Nie znalazłem żadnych meczów w rundzie {runda} w S45_SWISS.csv."
+                f"Nie znalazłem żadnych meczów w rundzie {runda} w S51_SWISS.csv."
             )
             return
 
         updated = 0
         skipped = []
+
+        walkowery = []  # (nat_nieobecny, nat_obecny)
 
         for i in idx_round:
             nat1 = str(df.at[i, "Kraj1"]).strip().upper() if "Kraj1" in df.columns else ""
@@ -7680,10 +7915,66 @@ def build_gui(parent):
                 skipped.append((nat1 or "?", nat2 or "?"))
                 continue
 
-            if nat1 not in pts_map or nat2 not in pts_map:
-                skipped.append((nat1, nat2))
+            has1 = nat1 in pts_map
+            has2 = nat2 in pts_map
+
+            if not has1 and not has2:
+                # obie drużyny nieobecne – traktuj jak 0:0 (remis, obie 1 PktM)
+                # minipunkty = 0 dla obu
+                df.at[i, f"{mini_col_prefix}1"] = 0.0
+                df.at[i, f"{mini_col_prefix}2"] = 0.0
+                for side, add in (("1", 1.0), ("2", 1.0)):
+                    col = f"PktM{side}"
+                    try:
+                        old = float(df.at[i, col] or 0.0)
+                    except Exception:
+                        old = 0.0
+                    df.at[i, col] = old + add
+                for side in ("1", "2"):
+                    total_mini = (
+                        float(df.at[i, f"MinipunktyM{side}"] or 0.0)
+                        + float(df.at[i, f"MinipunktyW{side}"] or 0.0)
+                        + float(df.at[i, f"MinipunktyX{side}"] or 0.0)
+                    )
+                    df.at[i, f"Minipunkty{side}"] = round(total_mini, 1)
+                walkowery.append((f"{nat1}+{nat2}", "obie nieobecne → remis 1:1"))
+                updated += 1
                 continue
 
+            if not has1 or not has2:
+                # jedna drużyna nieobecna → walkower: nieobecna 0 PktM i 0 mini, obecna 2 PktM
+                absent_side  = "1" if not has1 else "2"
+                present_side = "2" if not has1 else "1"
+                absent_nat   = nat1 if not has1 else nat2
+                present_nat  = nat2 if not has1 else nat1
+
+                # nieobecna: 0 minipunktów, 0 PktM
+                df.at[i, f"{mini_col_prefix}{absent_side}"] = 0.0
+                df.at[i, f"Minipunkty{absent_side}"] = 0.0
+
+                # obecna: minipunkty z wyników, +2 PktM
+                present_mini = round(float(pts_map.get(present_nat, 0.0)), 1)
+                df.at[i, f"{mini_col_prefix}{present_side}"] = present_mini
+                col = f"PktM{present_side}"
+                try:
+                    old = float(df.at[i, col] or 0.0)
+                except Exception:
+                    old = 0.0
+                df.at[i, col] = old + 2.0
+
+                # przelicz Minipunkty dla obecnej strony
+                total_mini = (
+                    float(df.at[i, f"MinipunktyM{present_side}"] or 0.0)
+                    + float(df.at[i, f"MinipunktyW{present_side}"] or 0.0)
+                    + float(df.at[i, f"MinipunktyX{present_side}"] or 0.0)
+                )
+                df.at[i, f"Minipunkty{present_side}"] = round(total_mini, 1)
+
+                walkowery.append((absent_nat, present_nat))
+                updated += 1
+                continue
+
+            # --- normalny mecz: obie drużyny w wynikach ---
             mini1 = round(float(pts_map.get(nat1, 0.0)), 1)
             mini2 = round(float(pts_map.get(nat2, 0.0)), 1)
 
@@ -7717,7 +8008,6 @@ def build_gui(parent):
                 )
                 df.at[i, f"Minipunkty{side}"] = round(total_mini, 1)
 
-
             updated += 1
 
         # zapisz do CSV
@@ -7738,9 +8028,15 @@ def build_gui(parent):
 
         msg = f"Zaktualizowano rundę {runda} dla typu {human}.\n" \
               f"Mecze zaktualizowane: {updated}"
+        if walkowery:
+            szczegoly = "\n".join(
+                f"  • {ab} → walkower dla {pr}" if pr != "obie nieobecne → remis 1:1"
+                else f"  • {ab} → {pr}"
+                for ab, pr in walkowery
+            )
+            msg += f"\n\nWalkowery / nieobecności ({len(walkowery)}):\n{szczegoly}"
         if skipped:
-            # nie będę tu robił elaboratu, tylko krótkie info
-            msg += f"\nPominięte mecze (brak wyników dla krajów): {len(skipped)}"
+            msg += f"\nPominięte (brak obu krajów w meczu): {len(skipped)}"
 
         messagebox.showinfo("SWISS – wyniki", msg)
 
@@ -7904,7 +8200,7 @@ def build_gui(parent):
             
     def _cc_update_groups_from_results(kolejka: int):
         """
-        Aktualizuje S45_CC_Grupa_A…D.csv na podstawie:
+        Aktualizuje S51_CC_Grupa_A…D.csv na podstawie:
         - terminarza grup CC (kolejka 1–3),
         - ostatniego konkursu drużyn (_LAST_TEAM_CLASSIF).
 
@@ -7984,7 +8280,7 @@ def build_gui(parent):
         needed_cols = ["Lp.", "Drużyna", "Kraj", "Punkty Zdobyte", "Punkty Stracone", "Minipunkty"]
 
         for g in sorted(groups.keys()):
-            p = dir_path / f"S45_CC_Grupa_{g}.csv"
+            p = dir_path / f"S51_CC_Grupa_{g}.csv"
             if not p.is_file():
                 continue
             try:
@@ -7996,9 +8292,13 @@ def build_gui(parent):
             for col in needed_cols:
                 if col not in df_g.columns:
                     if col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
-                        df_g[col] = 0
+                        df_g[col] = 0.0
                     else:
                         df_g[col] = ""
+            # upewnij się że kolumny numeryczne mają typ float (nie int64)
+            for col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
+                if col in df_g.columns:
+                    df_g[col] = pd.to_numeric(df_g[col], errors="coerce").fillna(0.0).astype(float)
 
             df_g["Kraj"] = df_g["Kraj"].astype(str).str.strip().str.upper()
             for col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
@@ -8009,7 +8309,7 @@ def build_gui(parent):
         if not group_tables:
             messagebox.showwarning(
                 "CC – grupy",
-                "Nie znaleziono żadnych plików S45_CC_Grupa_*.csv do aktualizacji."
+                "Nie znaleziono żadnych plików S51_CC_Grupa_*.csv do aktualizacji."
             )
             return
 
@@ -8059,7 +8359,7 @@ def build_gui(parent):
 
         # --- zapis z powrotem do CSV (sortowanie + zaokrąglenie) ---
         for g, df_g in group_tables.items():
-            p = dir_path / f"S45_CC_Grupa_{g}.csv"
+            p = dir_path / f"S51_CC_Grupa_{g}.csv"
 
             # dopilnujmy typów numerycznych
             for col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
@@ -8102,7 +8402,7 @@ def build_gui(parent):
     def _cc_update_bracket_from_results(faza: str):
         """
         Aktualizuje drabinkę pucharową CC na podstawie:
-        - S45_CC_Puchar.csv
+        - S51_CC_Puchar.csv
         - ostatniej klasyfikacji drużyn (_LAST_TEAM_CLASSIF)
 
         Zasady:
@@ -8158,7 +8458,7 @@ def build_gui(parent):
             messagebox.showerror("CC – puchar", f"Folder CC nie istnieje:\n{dir_path}")
             return
 
-        p = dir_path / "S45_CC_Puchar.csv"
+        p = dir_path / "S51_CC_Puchar.csv"
         if not p.is_file():
             messagebox.showwarning("CC – puchar", f"Brak pliku pucharu:\n{p}")
             return
@@ -8176,10 +8476,10 @@ def build_gui(parent):
         ]
         for col in needed_cols:
             if col not in df.columns:
-                df[col] = 0 if col.startswith(("Punkty", "Minipunkty")) else ""
+                df[col] = 0.0 if col.startswith(("Punkty", "Minipunkty")) else ""
 
         for col in ("Punkty1", "Punkty2", "Minipunkty1", "Minipunkty2"):
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0).astype(float)
 
         df["Kraj1"] = df["Kraj1"].astype(str).str.strip().str.upper()
         df["Kraj2"] = df["Kraj2"].astype(str).str.strip().str.upper()
@@ -8241,15 +8541,15 @@ def build_gui(parent):
             group_map = {1: "A", 2: "B", 3: "C", 4: "D"}
             group_letter = group_map.get(group_no, "A")
             
-            # 2. Tworzymy poprawną nazwę pliku (np. S45_MSC_W_Grupa_A.csv)
-            filename = f"S45_MSC_{sex}_Grupa_{group_letter}.csv"
+            # 2. Tworzymy poprawną nazwę pliku (np. S51_MSC_W_Grupa_A.csv)
+            filename = f"S51_MSC_{sex}_Grupa_{group_letter}.csv"
             
             # 3. Szukamy pliku w dostępnych lokalizacjach
             path = _find_nearby_file(filename)
             
             if not path:
                 # Próba awaryjna: sprawdźmy, czy plik nie ma nazwy z numerem zamiast litery
-                path = _find_nearby_file(f"S45_MSC_{sex}_Grupa_{group_no}.csv")
+                path = _find_nearby_file(f"S51_MSC_{sex}_Grupa_{group_no}.csv")
 
             if not path:
                 messagebox.showwarning("MSC", f"Nie znaleziono pliku: {filename}\nUpewnij się, że plik znajduje się w folderze MSC.")
@@ -8273,7 +8573,7 @@ def build_gui(parent):
             
     def _msc_update_all_groups_from_results(sex: str, runda: str):
         """
-        Aktualizuje pliki S45_MSC_<sex>_Grupa_A...D.csv na podstawie:
+        Aktualizuje pliki S51_MSC_<sex>_Grupa_A...D.csv na podstawie:
         - terminarza MSC dla danej płci,
         - ostatniego konkursu drużynowego (_LAST_TEAM_CLASSIF).
         """
@@ -8315,7 +8615,7 @@ def build_gui(parent):
         
         # 4. Proces aktualizacji plików dla każdej grupy
         for g_letter in ("A", "B", "C", "D"):
-            filename = f"S45_MSC_{sex}_Grupa_{g_letter}.csv"
+            filename = f"S51_MSC_{sex}_Grupa_{g_letter}.csv"
             path = dir_path / filename
             
             if not path.exists():
@@ -8328,7 +8628,9 @@ def build_gui(parent):
                 # Normalizacja kolumn
                 df_g["Kraj"] = df_g["Kraj"].astype(str).str.strip().str.upper()
                 for col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
-                    df_g[col] = pd.to_numeric(df_g[col], errors="coerce").fillna(0.0)
+                    if col not in df_g.columns:
+                        df_g[col] = 0.0
+                    df_g[col] = pd.to_numeric(df_g[col], errors="coerce").fillna(0.0).astype(float)
 
                 # Filtrujemy mecze tylko dla tej konkretnej grupy
                 group_matches = [m for m in current_matches if m.get("Grupa") == g_letter]
@@ -8391,7 +8693,7 @@ def build_gui(parent):
         # 2. Lokalizacja pliku
         dir_var = self.msc_m_dir_var if sex == "M" else self.msc_w_dir_var
         dir_path = Path(dir_var.get().strip() or ".")
-        season = dir_path.parent.name if "S" in dir_path.parent.name else "S45"
+        season = dir_path.parent.name if "S" in dir_path.parent.name else "S51"
         path = dir_path / f"{season}_MSC_{sex}_Puchar.csv"
 
         if not path.exists():
@@ -8410,6 +8712,14 @@ def build_gui(parent):
         if df is None:
             messagebox.showerror("Błąd", "Nie można odczytać pliku CSV.")
             return
+
+        # Wymuś float64 na kolumnach liczbowych – pandas 2.x rzuca LossySetitemError
+        # gdy próbuje wpisać float do kolumny int64 wczytanej z CSV
+        for _col in ("Punkty1", "Punkty2", "Minipunkty1", "Minipunkty2"):
+            if _col in df.columns:
+                df[_col] = pd.to_numeric(df[_col], errors="coerce").fillna(0.0).astype(float)
+            else:
+                df[_col] = 0.0
 
         # 4. Harmonogram meczów
         phase_matches = {
@@ -8493,9 +8803,9 @@ def build_gui(parent):
     def _cc_final_reload():
             """
             Klasyfikacja końcowa CC:
-            - miejsca 1–16 z drabinki pucharowej S45_CC_Puchar.csv
+            - miejsca 1–16 z drabinki pucharowej S51_CC_Puchar.csv
             (Finał + mecze o X miejsce),
-            - miejsca 17+ z kwalifikacji Q (S45_Q_CC_M/W/X)
+            - miejsca 17+ z kwalifikacji Q (S51_Q_CC_M/W/X)
             według sumy punktów z Q.
 
             Dodatkowo liczymy:
@@ -8521,10 +8831,10 @@ def build_gui(parent):
             def _load_q_one(suffix: str, col_name: str):
                 nonlocal problems
                 # Szukaj najpierw dokładnej nazwy, potem przez glob (*_Q_CC_M*.csv)
-                fname = f"S45_Q_CC_{suffix}.csv"
+                fname = f"S51_Q_CC_{suffix}.csv"
                 p = dir_path / fname
                 if not p.exists():
-                    # fallback: glob po wzorcu (obsługuje np. S45_Q_CC_M_wyniki.csv)
+                    # fallback: glob po wzorcu (obsługuje np. S51_Q_CC_M_wyniki.csv)
                     candidates = sorted(dir_path.glob(f"*_Q_CC_{suffix}*.csv"))
                     if candidates:
                         p = candidates[0]
@@ -8618,7 +8928,7 @@ def build_gui(parent):
             if not rows_q:
                 messagebox.showwarning(
                     "CC – klasyfikacja końcowa",
-                    "Brak danych z Q CC (S45_Q_CC_M/W/X)."
+                    "Brak danych z Q CC (S51_Q_CC_M/W/X)."
                 )
                 return
 
@@ -8655,7 +8965,7 @@ def build_gui(parent):
 
             # punkty z grup
             for g in ("A", "B", "C", "D"):
-                p_g = dir_path / f"S45_CC_Grupa_{g}.csv"
+                p_g = dir_path / f"S51_CC_Grupa_{g}.csv"
                 if not p_g.is_file():
                     continue
                 try:
@@ -8677,7 +8987,7 @@ def build_gui(parent):
                     _add_big(r["Drużyna"], r["Kraj"], r["Punkty Zdobyte"])
 
             # --- 2) Wczytanie pucharu i wyciągnięcie miejsc 1–16 z drabinki ---
-            p_cup = dir_path / "S45_CC_Puchar.csv"
+            p_cup = dir_path / "S51_CC_Puchar.csv"
             if not p_cup.is_file():
                 messagebox.showwarning(
                     "CC – klasyfikacja końcowa",
@@ -8916,10 +9226,10 @@ def build_gui(parent):
 
             # --- zapis do CSV ---
             try:
-                out_path = dir_path / "S45_CC_Klasyfikacja.csv"
+                out_path = dir_path / "S51_CC_Klasyfikacja.csv"
                 df_final.to_csv(out_path, sep=";", index=False, encoding="utf-8-sig")
             except Exception as e:
-                problems.append(f"Nie udało się zapisać S45_CC_Klasyfikacja.csv: {e}")
+                problems.append(f"Nie udało się zapisać S51_CC_Klasyfikacja.csv: {e}")
 
 
 
@@ -8967,6 +9277,7 @@ def build_gui(parent):
             wind_phi=float(wind_phi.get()), wind_takeoff_gain=float(wind_takeoff_gain.get()),
             wind_flight_gain=float(wind_flight_gain.get()), judges_rho=float(judges_rho.get()),
             finalists_n=int(finalists_n.get()), num_series=int(num_series.get()),
+            ability_scale=float(max(1.0, ability_scale_value.get())),
         )
         if klasyf is None:
             messagebox.showwarning("Brak drużyn", "Żaden kraj nie ma min. 4 zawodników.")
@@ -9050,22 +9361,36 @@ def build_gui(parent):
         if falls_df is None or getattr(falls_df, 'empty', True):
             falls_df = pd.DataFrame(columns=['Seria','Kraj','Drużyna','Zawodnik','Odległość (m)','Punkty rundy'])
         else:
-            # mamy upadki z TEAM – popraw kolumny kraj/drużyna
-            falls_df = falls_df.rename(columns={'Druzyna': 'Kraj'})
+            # mamy upadki z TEAM – zachowaj oryginalny Kraj zawodnika,
+            # kolumnę Druzyna (kod drużyny) przemianuj na Druzyna_team pomocniczo
+            if "Druzyna" in falls_df.columns:
+                falls_df = falls_df.rename(columns={'Druzyna': '_Druzyna_team'})
 
             # Kraj potrafi być DataFrame, wyciągamy pierwszą kolumnę
-            kraj_obj = falls_df["Kraj"]
-            kraj_ser = first_series(kraj_obj)
-            if kraj_ser is None:
-                kraj_ser = kraj_obj
+            if "Kraj" in falls_df.columns:
+                kraj_obj = falls_df["Kraj"]
+                kraj_ser = first_series(kraj_obj)
+                if kraj_ser is None:
+                    kraj_ser = kraj_obj
+                falls_df["Kraj"] = kraj_ser.astype(str).str.strip()
+            elif "_Druzyna_team" in falls_df.columns:
+                # fallback: brak kolumny Kraj – użyj kodu drużyny
+                falls_df["Kraj"] = falls_df["_Druzyna_team"].astype(str).str.strip()
 
-            falls_df["Kraj"] = kraj_ser.astype(str).str.strip()
-
-            # wywal duplikaty nagłówków (w tym wielokrotne "Kraj")
+            # wywal duplikaty nagłówków
             falls_df = falls_df.loc[:, ~falls_df.columns.duplicated()]
 
-            # nazwa drużyny z mapy TEAM_NAME
-            falls_df["Drużyna"] = falls_df["Kraj"].map(lambda x: TEAM_NAME.get(str(x), str(x)))
+            # nazwa drużyny: z mapy TEAM_NAME opartej na kodzie drużyny (_Druzyna_team),
+            # a jeśli go nie ma – opartej na Kraj zawodnika
+            if "_Druzyna_team" in falls_df.columns:
+                falls_df["Drużyna"] = falls_df["_Druzyna_team"].map(
+                    lambda x: TEAM_NAME.get(str(x), str(x))
+                )
+                falls_df.drop(columns=["_Druzyna_team"], inplace=True, errors="ignore")
+            else:
+                falls_df["Drużyna"] = falls_df["Kraj"].map(
+                    lambda x: TEAM_NAME.get(str(x), str(x))
+                )
 
         # --- Kontuzje po upadkach (TEAM) – użyj silnika z IND GUI, jeśli jest ---
         try:

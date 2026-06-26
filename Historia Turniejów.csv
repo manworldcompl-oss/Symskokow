@@ -21,6 +21,9 @@ WCH;S38;JPN;Sapporo
 WCH;S40;SWE;Falun
 WCH;S42;FIN;Kuopio
 WCH;S44;USA;Park City
+WCH;S46;GBR;Newcastle
+WCH;S48;ROU;Rasnov
+WCH;S50;MHL;Majuro
 OG;;;
 OG;S3;CHN;Yabuli
 OG;S7;RUS;Sochi
@@ -33,6 +36,7 @@ OG;S31;USA;Park City
 OG;S35;SUI;Engelberg
 OG;S39;SLO;Planica
 OG;S43;AUT;Bischofschofen
+OG;S47;NOR;Oslo
 SFWC;;;
 SFWC;S1;SLO;Planica
 SFWC;S3;NOR;Vikersund
@@ -56,6 +60,9 @@ SFWC;S37;FIN;Lahti
 SFWC;S39;KAZ;Schtchutchinsk
 SFWC;S41;USA;Ironwood
 SFWC;S43;RUS;Chaikovsky
+SFWC;S45;SLO;Planica
+SFWC;S47;SVK;Strbske Pleso
+SFWC;S49;AUT;Bad Mittendorf
 COCH-EU;;;
 COCH-EU;S16;SUI;Einsiedeln
 COCH-EU;S20;FIN;Lahti
@@ -65,6 +72,7 @@ COCH-EU;S32;POR;Braganca
 COCH-EU;S36;GER;Oberwiesenthal
 COCH-EU;S40;FRA;Chamonix
 COCH-EU;S44;LTU;Ignalina
+COCH-EU;S48;GER;Willingen
 COCH-AS;;;
 COCH-AS;S16;JPN;Sapporo
 COCH-AS;S20;KAZ;Almaty
@@ -74,6 +82,7 @@ COCH-AS;S32;PAK;Islamabad
 COCH-AS;S36;BHU;Punaka
 COCH-AS;S40;TUR;Erzurum
 COCH-AS;S44;KAZ;Schtchutchinsk
+COCH-AS;S48;GEO;Bakuriani
 COCH-NA;;;
 COCH-NA;S16;JAM;Kingston
 COCH-NA;S20;HAI;Hinche
@@ -83,6 +92,7 @@ COCH-NA;S32;PUR;Ponce
 COCH-NA;S36;CUW;Christoffelberg
 COCH-NA;S40;BAR;Hillaby
 COCH-NA;S44;CRC;San Jose
+COCH-NA;S48;JAM;Kingston
 COCH-SA;;;
 COCH-SA;S16;BRA;Sao Paulo
 COCH-SA;S20;VEN;Caracas
@@ -92,6 +102,7 @@ COCH-SA;S32;CHI;Santiago
 COCH-SA;S36;COL;Bogota
 COCH-SA;S40;VEN;Caracas
 COCH-SA;S44;ECU;Galapagos
+COCH-SA;S48;BRA;Sao Paulo
 COCH-AF;;;
 COCH-AF;S16;RPA;Johannesburg
 COCH-AF;S20;MAR;Marrakesh
@@ -101,6 +112,7 @@ COCH-AF;S32;CPV;Praia
 COCH-AF;S36;MAD;Antananarywa
 COCH-AF;S40;NGR;Lagos
 COCH-AF;S44;BUR;Ouagadougou
+COCH-AF;S48;CPV;Praia
 COCH-OC;;;
 COCH-OC;S16;NZL;Auckland
 COCH-OC;S20;AUS;Sydney
@@ -110,6 +122,7 @@ COCH-OC;S32;MHL;Majuro
 COCH-OC;S36;PLW;Airai
 COCH-OC;S40;AUS;Sydney
 COCH-OC;S44;SAM;A'ana
+COCH-OC;S48;MHL;Rairok
 JWC;;;
 JWC;S1;GER;Oberwiesenthal
 JWC;S2;POL;Zakopane
@@ -155,6 +168,12 @@ JWC;S41;TJK;Dushanbe
 JWC;S42;BOL;La Paz
 JWC;S43;MAR;Marrakesh
 JWC;S44;ALG;Oran
+JWC;S45;BIZ;Orange Walk
+JWC;S46;CZE;Stachy
+JWC;S47;LAT;Vestiena
+JWC;S48;ARG;San Luis
+JWC;S49;UAE;Dubaj
+JWC;S50;EGY;Kair
 YOG;;;
 YOG;S1;FRA;Premanon
 YOG;S5;SLO;Kranj
@@ -167,6 +186,8 @@ YOG;S29;RPA;Johannesburg
 YOG;S33;CHN;Yabuli
 YOG;S37;BHU;Punaka
 YOG;S41;VEN;Caracas
+YOG;S45;ITA;Predazzo
+YOG;S49;KEN;Nyeri
 UNI;;;
 UNI;S2;SUI;Kandersteg
 UNI;S6;JPN;Sapporo
@@ -179,6 +200,8 @@ UNI;S30;ISL;Reykjavik
 UNI;S34;AUS;Sydney
 UNI;S38;INA;Bali
 UNI;S42;COL;Bogota
+UNI;S46;SWE;Falun
+UNI;S50;CPV;Praia
 NKIC;;;
 NKIC;S16;GBR;Fort William
 NKIC;S18;JPN;Sapporo
@@ -195,6 +218,9 @@ NKIC;S38;ROU;Rasnov
 NKIC;S40;AUT;Bischofschofen
 NKIC;S42;SUI;Le Brassus
 NKIC;S44;CZE;Harrachov
+NKIC;S46;MHL;Majuro
+NKIC;S48;SLO;Planica
+NKIC;S50;NOR;Oslo
 IST;;;
 IST;S17;SLO;Kranj
 IST;S19;SUI;Engelberg
@@ -210,3 +236,6 @@ IST;S37;SLO;Kranj
 IST;S39;CAN;Whistler
 IST;S41;POL;Zakopane
 IST;S43;TUR;Erzurum
+IST;S45;GER;Oberstdorf
+IST;S47;USA;Park City
+IST;S49;KOR;Pyeongchang

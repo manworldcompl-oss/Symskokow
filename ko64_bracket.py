@@ -102,6 +102,7 @@ def simulate_full_ko64_tournament(
     wind_takeoff_gain: float,
     wind_flight_gain: float,
     judges_rho: float,
+    ability_scale: float = 100.0,
 ):
     """Return (kwal_df, kval_rank, contest_rows, klasyf, extra_sheets) with full KO64 bracket."""
     if meter_value is None:
@@ -117,6 +118,7 @@ def simulate_full_ko64_tournament(
         rng=rng, randomness=randomness, elite_regress=elite_regress,
         wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
         wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+        ability_scale=ability_scale,
         sort_output=True,
     )
     # ranking kwalifikacji
@@ -196,6 +198,7 @@ def simulate_full_ko64_tournament(
                     rng=rng, randomness=randomness, elite_regress=elite_regress,
                     wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
                     wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+                    ability_scale=ability_scale,
                     sort_output=False
                 )
                 row_a = r_pair.iloc[0].to_dict(); row_b = r_pair.iloc[1].to_dict()

@@ -1,0 +1,319 @@
+{
+  "_meta": {
+    "opis": "Struktura kalendarza sezonu Symskokow. Pole 'week' to numer tygodnia (1-33). Tygodnie z polem 'mod_rule' maja kilka wariantow zaleznych od sezonu - silnik gry musi wybrac wlasciwy wariant na podstawie offsetu sezonu.",
+    "mod4_formula": "(sezon - 1) % 4 -> 0:'+1', 1:'+2', 2:'+3', 3:'+0'",
+    "mod2_formula": "sezon % 2 -> 1:'+1' (sezon nieparzysty), 0:'+0' (sezon parzysty)",
+    "pola_turnieju": {
+      "kod": "skrot turnieju/cyklu, np. GP, WC, COC, FC, TEAM, JWC, OG...",
+      "ranga": "kategoria rangi: REGULAR (GP/WC/COC/FC/TEAM normalne), CHAMPIONSHIP (mistrzostwa: WCH, JWC, OG, UNI, YOG, COCH, NKIC, IST, SFWC), JUNIOR"
+    },
+    "sub_tournaments_slownik": {
+      "TCS": "Turniej Czterech Skoczni - podturniej w ramach WC-M, tydz. 14",
+      "FNT": "Turniej Czterech Nocy - podturniej w ramach WC-W, tydz. 14",
+      "NT": "New Tournament - podturniej w ramach WC-M, tydz. 18-19",
+      "RAWAIR_W": "Raw Air kobiet - podturniej w ramach WC-W, tydz. 29-30",
+      "FT": "Final Tournament - podturniej w ramach WC-M, tydz. 31-32",
+      "BB": "Blue Bird - podturniej w ramach WC-W, tydz. 31-32"
+    },
+    "modyfikatory_opisu": {
+      "NORMAL": "standardowy format konkursu",
+      "TEAM": "konkurs druzynowy",
+      "MIXED": "konkurs mieszany",
+      "JUN": "dolaczone konkursy juniorskie",
+      "x3": "wielokrotnosc konkursow danego cyklu w tym tygodniu",
+      "wykluczenia": "lista kodow ktore NIE odbywaja sie mimo ze cykl bazowy jest aktywny, np. tydz.29 WC-W bez FC"
+    }
+  },
+
+  "weeks": [
+    {
+      "week": 1, "variant": null,
+      "competitions": [{"kod": "GP", "ranga": "REGULAR"}, {"kod": "SCOC", "ranga": "REGULAR"}],
+      "format": "NORMAL",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 2, "variant": null,
+      "competitions": [{"kod": "GP", "ranga": "REGULAR"}, {"kod": "SCOC", "ranga": "REGULAR"}, {"kod": "JUN", "ranga": "JUNIOR"}],
+      "format": "NORMAL+JUN",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 3, "variant": null,
+      "competitions": [{"kod": "GP", "ranga": "REGULAR"}, {"kod": "SCOC", "ranga": "REGULAR"}],
+      "format": "NORMAL",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 4, "variant": null,
+      "competitions": [{"kod": "TEAM", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 5, "variant": null,
+      "competitions": [{"kod": "GP", "ranga": "REGULAR"}],
+      "format": "MIXED",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 6, "variant": null,
+      "competitions": [{"kod": "GP", "ranga": "REGULAR"}],
+      "format": "TEAM",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 7, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "NORMAL",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 8, "variant": null,
+      "competitions": [{"kod": "TEAM", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 9, "variant": null,
+      "competitions": [{"kod": "JWC", "ranga": "CHAMPIONSHIP"}, {"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}],
+      "format": "JWC+WC,COC",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 10, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "NORMAL",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 11, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "WCx3",
+      "modifiers": {"multiplikatory": {"WC": 3}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 12, "variant": null,
+      "competitions": [{"kod": "TEAM", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 13, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "NORMAL",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 14, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": [
+        {"kod": "TCS", "plec": "M", "parent": "WC", "nazwa": "Turniej Czterech Skoczni"},
+        {"kod": "FNT", "plec": "W", "parent": "WC", "nazwa": "Turniej Czterech Nocy"}
+      ]
+    },
+
+    {
+      "week": 15, "variant": "mod4+0", "mod_rule": {"type": "mod4", "offset": 0},
+      "competitions": [{"kod": "COCH", "ranga": "CHAMPIONSHIP"}],
+      "format": "CH",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 15, "variant": "mod4+1", "mod_rule": {"type": "mod4", "offset": 1},
+      "competitions": [{"kod": "YOG", "ranga": "CHAMPIONSHIP"}, {"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "CH+WC,COC,FC",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 15, "variant": "mod4+2", "mod_rule": {"type": "mod4", "offset": 2},
+      "competitions": [{"kod": "UNI", "ranga": "CHAMPIONSHIP"}, {"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "CH+WC,COC,FC",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 15, "variant": "mod4+3", "mod_rule": {"type": "mod4", "offset": 3},
+      "competitions": [{"kod": "OG", "ranga": "CHAMPIONSHIP"}],
+      "format": "CH",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+
+    {
+      "week": 16, "variant": null,
+      "competitions": [{"kod": "TEAM", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 17, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "NORMAL",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 18, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": [
+        {"kod": "NT", "plec": "M", "parent": "WC", "nazwa": "New Tournament"}
+      ]
+    },
+    {
+      "week": 19, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": [
+        {"kod": "NT", "plec": "M", "parent": "WC", "nazwa": "New Tournament"}
+      ]
+    },
+    {
+      "week": 20, "variant": null,
+      "competitions": [{"kod": "TEAM", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+
+    {
+      "week": 21, "variant": "mod2+0", "mod_rule": {"type": "mod2", "offset": 0},
+      "competitions": [{"kod": "NKIC", "ranga": "CHAMPIONSHIP"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "CH+COC,FC",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 21, "variant": "mod2+1", "mod_rule": {"type": "mod2", "offset": 1},
+      "competitions": [{"kod": "IST", "ranga": "CHAMPIONSHIP"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "CH+COC,FC",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+
+    {
+      "week": 22, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "TEAM",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 23, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "TEAM",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 24, "variant": null,
+      "competitions": [{"kod": "TEAM", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 25, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "TEAM",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 26, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "TEAM",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+
+    {
+      "week": 27, "variant": "mod2+0", "mod_rule": {"type": "mod2", "offset": 0},
+      "competitions": [{"kod": "WCH", "ranga": "CHAMPIONSHIP"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "CH+COC,FC",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 27, "variant": "mod2+1", "mod_rule": {"type": "mod2", "offset": 1},
+      "competitions": [{"kod": "SFWC", "ranga": "CHAMPIONSHIP"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR"}],
+      "format": "CH+COC,FC",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+
+    {
+      "week": 28, "variant": null,
+      "competitions": [{"kod": "TEAM", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    },
+    {
+      "week": 29, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}, {"kod": "FC", "ranga": "REGULAR", "plec": "M"}],
+      "format": "NORMAL",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": ["FC_W"]},
+      "sub_tournaments": [
+        {"kod": "RAWAIR_W", "plec": "W", "parent": "WC", "nazwa": "Raw Air (kobiety)"}
+      ]
+    },
+    {
+      "week": 30, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR"}],
+      "format": "NORMAL",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": ["FC"]},
+      "sub_tournaments": [
+        {"kod": "RAWAIR_W", "plec": "W", "parent": "WC", "nazwa": "Raw Air (kobiety)"}
+      ]
+    },
+    {
+      "week": 31, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}, {"kod": "COC", "ranga": "REGULAR", "plec": "M"}],
+      "format": "NORMAL",
+      "modifiers": {"multiplikatory": {}, "wykluczenia": ["FC", "COC_W"]},
+      "sub_tournaments": [
+        {"kod": "FT", "plec": "M", "parent": "WC", "nazwa": "Final Tournament"},
+        {"kod": "BB", "plec": "W", "parent": "WC", "nazwa": "Blue Bird"}
+      ]
+    },
+    {
+      "week": 32, "variant": null,
+      "competitions": [{"kod": "WC", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": [
+        {"kod": "FT", "plec": "M", "parent": "WC", "nazwa": "Final Tournament"},
+        {"kod": "BB", "plec": "W", "parent": "WC", "nazwa": "Blue Bird"}
+      ]
+    },
+    {
+      "week": 33, "variant": null,
+      "competitions": [{"kod": "TEAM", "ranga": "REGULAR"}],
+      "format": null,
+      "modifiers": {"multiplikatory": {}, "wykluczenia": []},
+      "sub_tournaments": []
+    }
+  ]
+}

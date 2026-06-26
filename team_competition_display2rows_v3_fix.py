@@ -134,12 +134,13 @@ def simulate_team_competition(
     p_gate_change: float = 0.06,
     max_gate_delta: int = 2,
     rng: np.random.Generator | None = None,
-    randomness: float = 0.35,
-    elite_regress: float = 1.0,
+    randomness: float = 1.5,
+    elite_regress: float = 1.5,
     wind_phi: float = 0.75,
     wind_takeoff_gain: float = 0.5,
     wind_flight_gain: float = 2.2,
     judges_rho: float = 0.55,
+    ability_scale: float = 100.0,
 ):
     if meter_value is None:
         meter_value = compute_meter_value(K)
@@ -169,7 +170,8 @@ def simulate_team_competition(
             p_gate_change, max_gate_delta, rng_loc,
             randomness, elite_regress,
             wind_phi, wind_takeoff_gain,
-            wind_flight_gain, judges_rho
+            wind_flight_gain, judges_rho,
+            ability_scale=ability_scale
         )
         r1 = recompute_round_metrics(r1, K, meter_value)
         if "OrderKey" in members.columns and "Zawodnik" in r1.columns:
@@ -177,7 +179,11 @@ def simulate_team_competition(
             r1["OrderKey"] = r1["Zawodnik"].map(ok_map)
         team_points = float(r1["Punkty rundy"].sum())
         team_scores_1.append((kraj, team_points))
-        detailed_1.append(r1.assign(Druzyna=kraj, Kraj=members.iloc[0]["Kraj"], Seria=1))
+        # Zachowaj oryginalny Kraj każdego zawodnika (nie bierz iloc[0] dla wszystkich)
+        if "Zawodnik" in r1.columns and "Kraj" in members.columns:
+            kraj_map = members.set_index("Zawodnik")["Kraj"]
+            r1["Kraj"] = r1["Zawodnik"].map(kraj_map).fillna(r1.get("Kraj", kraj))
+        detailed_1.append(r1.assign(Druzyna=kraj, Seria=1))
 
     df_r1 = pd.concat(detailed_1, ignore_index=True)
     team_scores_1 = pd.DataFrame(team_scores_1, columns=["Druzyna", "Punkty1"]).sort_values("Punkty1", ascending=False)
@@ -195,7 +201,8 @@ def simulate_team_competition(
             p_gate_change, max_gate_delta, rng_loc,
             randomness, elite_regress,
             wind_phi, wind_takeoff_gain,
-            wind_flight_gain, judges_rho
+            wind_flight_gain, judges_rho,
+            ability_scale=ability_scale
         )
         r2 = recompute_round_metrics(r2, K, meter_value)
         if "OrderKey" in members.columns and "Zawodnik" in r2.columns:
@@ -203,7 +210,11 @@ def simulate_team_competition(
             r2["OrderKey"] = r2["Zawodnik"].map(ok_map)
         team_points = float(r2["Punkty rundy"].sum())
         team_scores_2.append((kraj, team_points))
-        detailed_2.append(r2.assign(Druzyna=kraj, Kraj=members.iloc[0]["Kraj"], Seria=2))
+        # Zachowaj oryginalny Kraj każdego zawodnika (nie bierz iloc[0] dla wszystkich)
+        if "Zawodnik" in r2.columns and "Kraj" in members.columns:
+            kraj_map = members.set_index("Zawodnik")["Kraj"]
+            r2["Kraj"] = r2["Zawodnik"].map(kraj_map).fillna(r2.get("Kraj", kraj))
+        detailed_2.append(r2.assign(Druzyna=kraj, Seria=2))
 
     df_r2 = pd.concat(detailed_2, ignore_index=True) if detailed_2 else pd.DataFrame()
     team_scores_2 = pd.DataFrame(team_scores_2, columns=["Druzyna", "Punkty2"])

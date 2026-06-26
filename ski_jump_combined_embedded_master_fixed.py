@@ -20,6 +20,12 @@ try:
 except Exception as _e_cal_gui:
     build_calendars_gui = None
     print("[WARN] calendars_gui_embedded niedostępny:", _e_cal_gui)
+
+try:
+    from db_viewer_gui_embedded import build_gui as build_db_viewer_gui
+except Exception as _e_db_viewer:
+    build_db_viewer_gui = None
+    print("[WARN] db_viewer_gui_embedded niedostępny:", _e_db_viewer)
 # ==== BEGIN: Editor helpers for "Baza zawodników (EDYCJA)" ====
 PREFERRED_COL_ORDER = [
     "Zawodnik","Kraj","Płeć","JUN/SEN","Wiek","UM","Forma","PrawoStartu","Kontuzja"
@@ -207,6 +213,37 @@ APP_DIR = Path(__file__).resolve().parent
 IND_PATH = APP_DIR / "ski_jump_gui_full_embedded.py"
 TEAM_PATH = APP_DIR / "team_competition_gui_embedded.py"
 
+def detect_current_season_num(app_dir: Path):
+    """
+    Wykrywa numer bieżącego sezonu na podstawie folderów ./S<nr>/ w app_dir,
+    a w razie braku takich folderów - na podstawie najwyższego tagu 'S<nr>'
+    znalezionego w plikach .py w app_dir. Zwraca int albo None.
+    """
+    import re as _re3
+
+    season_nums = []
+    try:
+        for p in app_dir.iterdir():
+            if p.is_dir():
+                m = _re3.fullmatch(r"S(\d+)", p.name)
+                if m:
+                    season_nums.append(int(m.group(1)))
+    except Exception:
+        pass
+
+    if season_nums:
+        return max(season_nums)
+
+    nums = set()
+    for f in app_dir.glob("*.py"):
+        try:
+            text = f.read_text(encoding="utf-8", errors="ignore")
+        except Exception:
+            continue
+        nums.update(int(x) for x in _re3.findall(r"S(\d+)", text))
+    return max(nums) if nums else None
+
+
 class Combined(tk.Tk):
     def refresh_engine(self):
         import importlib, sys, traceback
@@ -243,6 +280,180 @@ class Combined(tk.Tk):
             )
         except Exception:
             messagebox.showerror("Błąd odświeżania", traceback.format_exc(), parent=self)
+
+    def _ask_season_numbers(self, detected_cur):
+        """
+        Okno z polami 'Bieżący sezon' i 'Nowy sezon' (numery, bez 'S'),
+        wstępnie wypełnionymi na podstawie auto-detekcji, ale w pełni
+        edytowalnymi przez użytkownika. Zwraca (cur, nxt) albo None,
+        jeśli użytkownik kliknął Anuluj / zamknął okno.
+        """
+        win = tk.Toplevel(self)
+        win.title("Nowy sezon")
+        try: win.transient(self)
+        except Exception: pass
+        try: win.grab_set()
+        except Exception: pass
+
+        frm = ttk.Frame(win, padding=12)
+        frm.pack(fill=tk.BOTH, expand=True)
+
+        default_cur = detected_cur if detected_cur is not None else ""
+        default_new = (detected_cur + 1) if detected_cur is not None else ""
+
+        ttk.Label(frm, text="Bieżący sezon (numer, np. 50):").grid(row=0, column=0, sticky="w", pady=4)
+        var_cur = tk.StringVar(value=str(default_cur))
+        ttk.Entry(frm, textvariable=var_cur, width=10).grid(row=0, column=1, sticky="w", padx=6, pady=4)
+
+        ttk.Label(frm, text="Nowy sezon (numer, np. 51):").grid(row=1, column=0, sticky="w", pady=4)
+        var_new = tk.StringVar(value=str(default_new))
+        ttk.Entry(frm, textvariable=var_new, width=10).grid(row=1, column=1, sticky="w", padx=6, pady=4)
+
+        if detected_cur is None:
+            ttk.Label(
+                frm,
+                text="(nie udało się wykryć numeru sezonu automatycznie - podaj go ręcznie)",
+                foreground="#a00",
+            ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(0, 4))
+
+        result = {"ok": False}
+
+        def _ok():
+            result["ok"] = True
+            win.destroy()
+
+        def _cancel():
+            result["ok"] = False
+            win.destroy()
+
+        btns = ttk.Frame(frm)
+        btns.grid(row=3, column=0, columnspan=2, pady=(10, 0))
+        ttk.Button(btns, text="Dalej", command=_ok).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btns, text="Anuluj", command=_cancel).pack(side=tk.LEFT, padx=4)
+
+        win.bind("<Return>", lambda e: _ok())
+        win.bind("<Escape>", lambda e: _cancel())
+
+        win.wait_window()
+
+        if not result["ok"]:
+            return None
+
+        from tkinter import messagebox
+        try:
+            cur = int(var_cur.get().strip())
+            nxt = int(var_new.get().strip())
+        except Exception:
+            messagebox.showerror("Nowy sezon", "Podaj poprawne numery sezonów (liczby całkowite).", parent=self)
+            return None
+        if cur == nxt:
+            messagebox.showerror("Nowy sezon", "Bieżący i nowy sezon muszą się różnić.", parent=self)
+            return None
+        return cur, nxt
+
+    def migrate_season_files(self):
+        """
+        Zamienia tag bieżącego sezonu (np. 'S51') na nowy (np. 'S51') we
+        WSZYSTKICH plikach .py leżących w tym samym folderze co ten plik
+        (bez podfolderów typu ./S51/ i bez plików .csv).
+        Numery sezonów są proponowane na podstawie auto-detekcji
+        (folder ./S<nr>/), ale użytkownik może je zmienić w oknie dialogowym.
+        Przed nadpisaniem każdy plik dostaje kopię '<nazwa>.py.bak_S<nr>'.
+        """
+        from tkinter import messagebox
+
+        detected_cur = detect_current_season_num(APP_DIR)
+
+        picked = self._ask_season_numbers(detected_cur)
+        if picked is None:
+            return
+        cur, nxt = picked
+
+        old_tag, new_tag = f"S{cur}", f"S{nxt}"
+
+        # 2) Znajdź pliki .py w tym folderze (nierekurencyjnie), które zawierają stary tag
+        hits = []
+        for f in sorted(APP_DIR.glob("*.py")):
+            try:
+                text = f.read_text(encoding="utf-8", errors="ignore")
+            except Exception:
+                continue
+            n = text.count(old_tag)
+            if n > 0:
+                hits.append((f, n, text))
+
+        if not hits:
+            messagebox.showinfo("Nowy sezon", f"Nie znaleziono wystąpień '{old_tag}' w plikach .py.", parent=self)
+            return
+
+        # 3) Potwierdzenie z podglądem
+        listing = "\n".join(f"• {f.name}: {n}x" for f, n, _ in hits)
+        ok = messagebox.askyesno(
+            "Nowy sezon",
+            f"Zmienić '{old_tag}' → '{new_tag}' w {len(hits)} plikach .py "
+            f"(w folderze {APP_DIR.name}, bez podfolderów i CSV)?\n\n{listing}\n\n"
+            f"Przed zapisem zostaną utworzone kopie '*.py.bak_{old_tag}'.",
+            parent=self,
+        )
+        if not ok:
+            return
+
+        # 4) Wykonaj zamianę + backup
+        done, errors = [], []
+        for f, n, text in hits:
+            try:
+                bak = f.with_name(f.name + f".bak_{old_tag}")
+                if not bak.exists():
+                    bak.write_text(text, encoding="utf-8")
+                f.write_text(text.replace(old_tag, new_tag), encoding="utf-8")
+                done.append(f"{f.name} ({n}x)")
+            except Exception as e:
+                errors.append(f"{f.name}: {e}")
+
+        msg = f"Zamieniono '{old_tag}' → '{new_tag}' w plikach:\n" + "\n".join(done)
+        if errors:
+            msg += "\n\nBłędy:\n" + "\n".join(errors)
+        msg += "\n\nPamiętaj, że ten plik (combined) zostanie w pełni odświeżony po restarcie programu."
+        messagebox.showinfo("Nowy sezon – gotowe", msg, parent=self)
+
+    def restart_app(self):
+        """
+        Odświeża WSZYSTKIE moduły - efektywnie restartuje cały program
+        (świeże wczytanie silnika, wszystkich zakładek/embedded GUI itd.),
+        tak jakby został odpalony od nowa.
+        """
+        from tkinter import messagebox
+
+        ok = messagebox.askyesno(
+            "Odśwież wszystkie moduły",
+            "To zamknie i ponownie uruchomi cały program, żeby świeżo wczytać "
+            "WSZYSTKIE moduły (silnik, wszystkie zakładki/pliki .py).\n"
+            "Niezapisane zmiany w otwartych zakładkach zostaną utracone.\n\n"
+            "Kontynuować?",
+            parent=self,
+        )
+        if not ok:
+            return
+
+        import os, sys, subprocess
+
+        # Uruchamiamy NOWĄ, niezależną instancję programu, a dopiero potem
+        # zamykamy tę. os.execv() nie nadaje się tu - przy starcie dwuklikiem
+        # (bez konsoli, np. pythonw.exe) potrafił całkowicie zabić proces
+        # bez odpalenia nowego okna.
+        try:
+            subprocess.Popen([sys.executable] + sys.argv, cwd=str(APP_DIR))
+        except Exception as e:
+            messagebox.showerror(
+                "Odśwież wszystkie moduły",
+                f"Nie udało się uruchomić nowej instancji programu:\n{e}",
+                parent=self,
+            )
+            return
+
+        # Natychmiastowe, "twarde" zamknięcie - bez tego SystemExit/Tk
+        # potrafi się dziwnie zachować wywołane z wnętrza callbacku przycisku.
+        os._exit(0)
 
     def _maximize_window(self):
         try:
@@ -285,19 +496,26 @@ class Combined(tk.Tk):
         self.ind_path = tk.StringVar(value=str(IND_PATH))
         self.team_path = tk.StringVar(value=str(TEAM_PATH))
 
-        ttk.Label(top, text="IND:").pack(side=tk.LEFT)
-        ttk.Entry(top, textvariable=self.ind_path, width=52).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
-        ttk.Button(top, text="Wskaż…", command=self.pick_ind).pack(side=tk.LEFT, padx=6)
-
-        ttk.Label(top, text="TEAM:", padding=(16,0)).pack(side=tk.LEFT)
-        ttk.Entry(top, textvariable=self.team_path, width=52).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=6)
-        ttk.Button(top, text="Wskaż…", command=self.pick_team).pack(side=tk.LEFT, padx=6)
-
-        # --- Actions at top ---
-        ttk.Button(top, text="Załaduj IND", command=self.load_ind).pack(side=tk.LEFT, padx=(16,0))
+        # --- Actions at top (jeden wiersz, IND/TEAM ścieżki schowane w dialogu) ---
+        ttk.Button(top, text="Załaduj IND", command=self.load_ind).pack(side=tk.LEFT)
         ttk.Button(top, text="Załaduj TEAM", command=self.load_team).pack(side=tk.LEFT, padx=6)
         ttk.Button(top, text="Załaduj oba", command=self.load_both).pack(side=tk.LEFT, padx=6)
         ttk.Button(top, text="Odśwież silnik", command=self.refresh_engine).pack(side=tk.LEFT, padx=6)
+        ttk.Button(top, text="⚙ Ścieżki IND/TEAM…", command=self.open_paths_dialog).pack(side=tk.LEFT, padx=6)
+
+        ttk.Separator(top, orient="vertical").pack(side=tk.LEFT, fill="y", padx=10, pady=2)
+
+        _cur_season = detect_current_season_num(APP_DIR)
+        if _cur_season is not None:
+            _season_label = f"🆕 Nowy sezon (S{_cur_season}→S{_cur_season + 1}, pliki .py)"
+        else:
+            _season_label = "🆕 Nowy sezon (pliki .py)"
+
+        ttk.Button(top, text=_season_label,
+                   command=self.migrate_season_files).pack(side=tk.LEFT)
+        ttk.Button(top, text="🔄 Odśwież wszystkie moduły (restart)",
+                   command=self.restart_app).pack(side=tk.LEFT, padx=(8, 0))
+
         ttk.Separator(self).pack(fill=tk.X, padx=8, pady=(6,0))
 
         self.nb = ttk.Notebook(self)
@@ -317,6 +535,16 @@ class Combined(tk.Tk):
         self.nb.add(self.tab_kalendarze, text="Kalendarze")
         self.nb.add(self.tab_cls, text="Klasyfikacje")
         self.nb.add(self.tab_staff, text="Sztab")
+
+        # --- PRZEGLĄDARKA BAZY MANAGER SKOKÓW ---
+        self.tab_db_viewer = ttk.Frame(self.nb)
+        self.nb.add(self.tab_db_viewer, text="Baza danych")
+        if build_db_viewer_gui:
+            try:
+                build_db_viewer_gui(self.tab_db_viewer).pack(fill=tk.BOTH, expand=True)
+            except Exception:
+                import traceback as _tb
+                print("[WARN] db_viewer_gui_embedded blad inicjalizacji:", _tb.format_exc())
         # --- NAGRODY ---
         if build_prizes_gui:
             self.tab_prizes = build_prizes_gui(self.nb)
@@ -347,15 +575,15 @@ class Combined(tk.Tk):
             messagebox.showerror("Klasyfikacje", traceback.format_exc(), parent=self)
 
         try:
-            default_hills = APP_DIR / "S45/Skocznie S45.csv"
+            default_hills = APP_DIR / "S51/Skocznie S51.csv"
         except Exception:
             default_hills = None
 
         self.hills_tab = HillsTab(
             self.tab_hills,
-            default_hills=Path("S45/Skocznie S45.csv"),
-            default_infra=Path("S45/Infrastruktura S45.csv"),
-            default_complexes=Path("S45/Kompleksy S45.csv"),
+            default_hills=Path("S51/Skocznie S51.csv"),
+            default_infra=Path("S51/Infrastruktura S51.csv"),
+            default_complexes=Path("S51/Kompleksy S51.csv"),
             flags_dir=FLAGS_DIR,
         )
         self.hills_tab.pack(fill=tk.BOTH, expand=True)
@@ -406,6 +634,30 @@ class Combined(tk.Tk):
             print(f"[ERROR] Nie udało się załadować modułu Obozy: {e}")
 
 
+
+    def open_paths_dialog(self):
+        """Okno z polami ścieżek IND/TEAM (domyślnie schowane, żeby pasek na górze był krótszy)."""
+        win = tk.Toplevel(self)
+        win.title("Ścieżki IND / TEAM")
+        try: win.transient(self)
+        except Exception: pass
+        try: win.grab_set()
+        except Exception: pass
+
+        frm = ttk.Frame(win, padding=10)
+        frm.pack(fill=tk.BOTH, expand=True)
+
+        ttk.Label(frm, text="IND:").grid(row=0, column=0, sticky="w", pady=4)
+        ttk.Entry(frm, textvariable=self.ind_path, width=60).grid(row=0, column=1, sticky="ew", padx=6, pady=4)
+        ttk.Button(frm, text="Wskaż…", command=self.pick_ind).grid(row=0, column=2, pady=4)
+
+        ttk.Label(frm, text="TEAM:").grid(row=1, column=0, sticky="w", pady=4)
+        ttk.Entry(frm, textvariable=self.team_path, width=60).grid(row=1, column=1, sticky="ew", padx=6, pady=4)
+        ttk.Button(frm, text="Wskaż…", command=self.pick_team).grid(row=1, column=2, pady=4)
+
+        frm.columnconfigure(1, weight=1)
+
+        ttk.Button(frm, text="Zamknij", command=win.destroy).grid(row=2, column=0, columnspan=3, pady=(10, 0))
 
     def pick_ind(self):
         p = filedialog.askopenfilename(filetypes=[("Python", "*.py"), ("All", "*.*")])

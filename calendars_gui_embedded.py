@@ -4,7 +4,7 @@
 Calendars GUI (embedded)
 
 • Czyta wszystkie pliki CSV z folderu ./Kalendarze i tworzy zakładkę na każdy plik.
-• Nazwy zakładek bez prefiksu: "Kalendarze_S45_" / "Kalendarz_S45_" / "Kalendarze_" / "Kalendarz_".
+• Nazwy zakładek bez prefiksu: "Kalendarze_S51_" / "Kalendarz_S51_" / "Kalendarze_" / "Kalendarz_".
 • Tabela jest sortowalna, z autosizing kolumn.
 • Kolorowanie wierszy wg wartości w wybranej kolumnie (np. IND/TEAM/MIX/KO…):
   - domyślna kolumna: pierwsza pasująca z ["Typ","Rodzaj","Zawody","Tryb","Event"].
@@ -65,14 +65,14 @@ except Exception as e:  # pragma: no cover
     raise SystemExit("Ten moduł wymaga pandas: pip install pandas")
 
 APP_DIR = Path(__file__).resolve().parent
-DEFAULT_DIR = APP_DIR / "./S45/Kalendarze"
+DEFAULT_DIR = APP_DIR / "./S51/Kalendarze"
 FLAG_DIR = APP_DIR / "flags"  # 18x11 px
 
 # ===================== helpers =====================
 
 def _strip_prefixes(stem: str) -> str:
     s = str(stem)
-    for pref in ("Kalendarze_S45_", "Kalendarz_S45_", "Kalendarze_", "Kalendarz_"):
+    for pref in ("Kalendarze_S51_", "Kalendarz_S51_", "Kalendarze_", "Kalendarz_"):
         if s.startswith(pref):
             return s[len(pref):]
     return s
@@ -87,6 +87,42 @@ _DEF_COLOR_RULES = {
 }
 
 _POSSIBLE_TYPE_COLS = ["Typ", "Rodzaj", "Zawody", "Tryb", "Event"]
+
+# ===================== Frekwencja (attendance) =====================
+
+_FREKWENCJA_BASE: dict[str, float] = {
+    "WC-M": 0.70, "WC-W": 0.70,
+    "GP-M": 0.60, "GP-W": 0.60,
+    "COC-M": 0.60, "COC-W": 0.60,
+    "FC-M": 0.50, "FC-W": 0.50,
+    "SCOC-M": 0.50, "SCOC-W": 0.50,
+    "JC-M": 0.40, "JC-W": 0.40,
+    "MC-M": 0.35, "MC-W": 0.35,
+    "PC-M": 0.32, "PC-W": 0.32,
+    "QC-M": 0.29, "QC-W": 0.29,
+    "TC-M": 0.26, "TC-W": 0.26,
+    "AC-M": 0.24, "AC-W": 0.24,
+    "BC-M": 0.22, "BC-W": 0.22,
+    "DC-M": 0.20, "DC-W": 0.20,
+    # Mistrzostwa (klucz = base_seria)
+    "OG": 1.00, "WCH": 0.90, "SFWC": 0.80,
+    "NKIC": 0.80, "IST": 0.80, "COCH": 0.75,
+    "JWC": 0.65, "YOG": 0.50, "UNI": 0.50,
+}
+
+_TURNIEJE_BONUS: dict[str, float] = {
+    "TCS": 0.22, "RA": 0.13, "NT": 0.10,
+    "FT": 0.08, "BB": 0.08, "W5": 0.07, "P7": 0.06,
+}
+
+# (rank_max_inclusive, bonus)
+_KRAJ_BONUS_TIERS: list[tuple[int, float]] = [
+    (5,  0.00),
+    (10, 0.03),
+    (20, 0.07),
+    (35, 0.12),
+    (9999, 0.18),
+]
 
 def _reorder_columns_case_insensitive(df: pd.DataFrame, desired: list[str]) -> list[str]:
     """Zwraca listę kolumn DF w kolejności desired (case-insensitive),
@@ -264,16 +300,16 @@ class CalendarsFrame(ttk.Frame):
         try:
             import pandas as pd
             _hills_candidates = [
-                APP_DIR / "S45" / "Skocznie_S45.csv",
-                APP_DIR / "S45" / "Skocznie S45.csv",
-                APP_DIR / "Skocznie_S45.csv",
-                APP_DIR / "Skocznie S45.csv",
-                Path("S45") / "Skocznie_S45.csv",
-                Path("Skocznie_S45.csv"),
+                APP_DIR / "S51" / "Skocznie_S51.csv",
+                APP_DIR / "S51" / "Skocznie S51.csv",
+                APP_DIR / "Skocznie_S51.csv",
+                APP_DIR / "Skocznie S51.csv",
+                Path("S51") / "Skocznie_S51.csv",
+                Path("Skocznie_S51.csv"),
             ]
             _hills_path = next((p for p in _hills_candidates if p.exists()), None)
             if _hills_path is None:
-                raise FileNotFoundError("Nie znaleziono pliku Skocznie S45.csv obok aplikacji")
+                raise FileNotFoundError("Nie znaleziono pliku Skocznie S51.csv obok aplikacji")
             hills_df = pd.read_csv(_hills_path, sep=';', encoding='cp1250')
         except Exception as e:
             print(f"Błąd wczytywania skoczni: {e}")
@@ -841,7 +877,7 @@ class HistoryFrame(ttk.Frame):
         dialog.grab_set()
         dialog.resizable(False, False)
 
-        ttk.Label(dialog, text="Podaj numer sezonu (np. S45):").pack(padx=20, pady=(16, 4))
+        ttk.Label(dialog, text="Podaj numer sezonu (np. S51):").pack(padx=20, pady=(16, 4))
         season_var = tk.StringVar()
         entry = ttk.Entry(dialog, textvariable=season_var, width=10)
         entry.pack(padx=20, pady=4)
@@ -1079,7 +1115,7 @@ class HistoryFrame(ttk.Frame):
         dialog.resizable(False, False)
         dialog.grab_set()
 
-        ttk.Label(dialog, text="Podaj sezon (np. S45):").pack(padx=20, pady=(16, 4))
+        ttk.Label(dialog, text="Podaj sezon (np. S51):").pack(padx=20, pady=(16, 4))
         season_var = tk.StringVar()
         entry = ttk.Entry(dialog, textvariable=season_var, width=12)
         entry.pack(padx=20, pady=(0, 12))
@@ -1139,7 +1175,7 @@ class HistoryFrame(ttk.Frame):
         for cal_file in cal_files:
             # Wyciągnij kod turnieju z nazwy pliku
             stem = cal_file.stem
-            # Usuń prefiks np. "Kalendarz_S45_" lub "Kalendarze_S45_"
+            # Usuń prefiks np. "Kalendarz_S51_" lub "Kalendarze_S51_"
             for pref in (f"Kalendarze_{season}_", f"Kalendarz_{season}_",
                          f"Kalendarze_{season.lower()}_", f"Kalendarz_{season.lower()}_",
                          "Kalendarze_", "Kalendarz_"):
@@ -1284,7 +1320,7 @@ class SeasonPlannerFrame(ttk.Frame):
         super().__init__(parent)
         self.main_app = main_app
         self.hills_df = main_app.host_tab.hills_df.copy()
-        self.season_var = tk.StringVar(value="S45")
+        self.season_var = tk.StringVar(value="S51")
         
         # --- KLUCZOWA POPRAWKA: Inicjalizacja słownika na samym starcie ---
         self.all_limits_data = {} 
@@ -1646,7 +1682,7 @@ class SeasonPlannerFrame(ttk.Frame):
             self.tree_limits.insert("", tk.END, values=(nat, lim, 0))
 
     def refresh_limits_for_cycle(self, gender, cycle):
-        """Ładuje limity. Obsługuje przeplatanie GP/SCOC oraz elastyczne nazwy plików (np. S45_WC-M)."""
+        """Ładuje limity. Obsługuje przeplatanie GP/SCOC oraz elastyczne nazwy plików (np. S51_WC-M)."""
         import re
         from pathlib import Path
         
@@ -1674,7 +1710,7 @@ class SeasonPlannerFrame(ttk.Frame):
 
         # Pomocnicza funkcja do szukania pliku z różnymi nazwami
         def find_nations_file(c, suf):
-            # Próbuje: S45_WC-M__nations.csv, WC-M__nations.csv, S45_WC_M... itd.
+            # Próbuje: S51_WC-M__nations.csv, WC-M__nations.csv, S51_WC_M... itd.
             possible_names = [
                 f"{prev_s}_{c}-{suf}__nations.csv",
                 f"{prev_s}_{c}_{suf}__nations.csv",
@@ -2073,7 +2109,7 @@ class SeasonPlannerFrame(ttk.Frame):
         try:
             s_num = int(re.search(r'\d+', s_str).group())
         except:
-            messagebox.showerror("Błąd", "Wpisz poprawny numer sezonu (np. S45)")
+            messagebox.showerror("Błąd", "Wpisz poprawny numer sezonu (np. S51)")
             return
 
         active_tours = self.get_active_tournaments(s_num)
@@ -2677,9 +2713,9 @@ class HostSelectionFrame(ttk.Frame):
         try:
             # Wczytanie z jawnym usunięciem spacji z nazw kolumn
             _cont_candidates = [
-                APP_DIR / "S45" / "ALL_NATIONS_CONTINENTS.csv",
+                APP_DIR / "S51" / "ALL_NATIONS_CONTINENTS.csv",
                 APP_DIR / "ALL_NATIONS_CONTINENTS.csv",
-                Path("S45") / "ALL_NATIONS_CONTINENTS.csv",
+                Path("S51") / "ALL_NATIONS_CONTINENTS.csv",
                 Path("ALL_NATIONS_CONTINENTS.csv"),
             ]
             _cont_path = next((p for p in _cont_candidates if p.exists()), None)
@@ -3131,20 +3167,18 @@ class EarningsFrame(ttk.Frame):
         wrap = ttk.Frame(self)
         wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Dodano 'NAT' do listy kolumn
-        self.cols = ("NAT", "Miasto", "Bilety", "TV", "Ochrona", "Przygotowanie", "Suma_Netto", "Podatek", "Suma_Brutto")
+        self.cols = ("NAT", "Miasto", "Pojemność", "Frekwencja", "TV", "Ochrona", "Przygotowanie", "Suma_Netto", "Podatek", "Suma_Brutto")
         self.tv = ttk.Treeview(wrap, columns=self.cols, show="tree headings")
-        
+
         self.tv.heading("#0", text="Cykl", command=lambda: self.sort_column("#0"))
         self.tv.column("#0", width=120)
-        
-        # Nagłówki wyświetlane
-        display_headers = ["NAT", "Miasto", "Bilety", "TV", "Ochrona", "Przygotowanie", "Suma (Netto)", "Podatek", "Suma (Finał)"]
+
+        display_headers = ["NAT", "Miasto", "Pojemność", "Frekwencja %", "TV", "Ochrona", "Przygotowanie", "Suma (Netto)", "Podatek", "Suma (Finał)"]
+        col_widths = {"NAT": 60, "Miasto": 110, "Pojemność": 90, "Frekwencja": 85}
         for col_id, text in zip(self.cols, display_headers):
             self.tv.heading(col_id, text=text, command=lambda c=col_id: self.sort_column(c))
-            # NAT i Miasto wyrównane do lewej, reszta do prawej (liczby)
             anchor = tk.W if col_id in ["NAT", "Miasto"] else tk.E
-            width = 60 if col_id == "NAT" else 110
+            width = col_widths.get(col_id, 110)
             self.tv.column(col_id, width=width, anchor=anchor)
 
         vsb = ttk.Scrollbar(wrap, orient="vertical", command=self.tv.yview)
@@ -3177,6 +3211,55 @@ class EarningsFrame(ttk.Frame):
         elif pre_tax <= 600000: return pre_tax * 0.24
         else: return pre_tax * 0.30
 
+    def _get_season_suffix(self) -> str:
+        if hasattr(self.main_app, 'dir_var'):
+            folder_name = str(self.main_app.dir_var.get())
+        else:
+            folder_name = str(getattr(self.main_app, 'cal_dir', 'S51'))
+        m = re.search(r'S\d+', folder_name, re.IGNORECASE)
+        return m.group(0).upper() if m else "S51"
+
+    def _load_nations_ranking(self) -> dict[str, int]:
+        """Wczytuje klasyfikację WC-M narody → {NAT: pozycja}."""
+        try:
+            season = self._get_season_suffix()
+            path = Path(f"./{season}/Klasyfikacje {season}/{season}_WC-M__nations.csv")
+            if not path.exists():
+                return {}
+            import pandas as pd
+            df = pd.read_csv(path, sep=';', encoding='utf-8-sig', dtype=str)
+            df.columns = [c.strip().upper() for c in df.columns]
+            nat_col = next((c for c in df.columns if c in ('NAT', 'KRAJ')), None)
+            if nat_col is None:
+                return {}
+            lp_col = next((c for c in df.columns if c in ('LP.', 'LP')), None)
+            result: dict[str, int] = {}
+            for i, (_, row) in enumerate(df.iterrows()):
+                nat = str(row[nat_col]).strip()
+                if not nat or nat == 'nan':
+                    continue
+                if lp_col:
+                    try:
+                        pos = int(float(str(row[lp_col]).replace(' ', '')))
+                    except Exception:
+                        pos = i + 1
+                else:
+                    pos = i + 1
+                result[nat] = pos
+            return result
+        except Exception:
+            return {}
+
+    def _compute_frekwencja(self, lookup_seria: str, dod_inf: str,
+                            kraj: str, nations_rank: dict[str, int],
+                            is_champ: bool) -> float:
+        base = _FREKWENCJA_BASE.get(lookup_seria, 0.20)
+        turniej_bonus = _TURNIEJE_BONUS.get(str(dod_inf).strip().upper(), 0.0) if not is_champ else 0.0
+        rank = nations_rank.get(kraj, 9999)
+        kraj_bonus = next(bonus for cap, bonus in _KRAJ_BONUS_TIERS if rank <= cap)
+        max_cap = 1.00 if lookup_seria == "OG" else 0.97
+        return min(max_cap, base + turniej_bonus + kraj_bonus)
+
     def refresh_data(self):
         for i in self.tv.get_children(): self.tv.delete(i)
         if not hasattr(self.main_app, '_all_weeks_data') or not self.main_app._all_weeks_data:
@@ -3184,12 +3267,12 @@ class EarningsFrame(ttk.Frame):
 
         import pandas as pd
         import math
-        
+
         df = pd.concat(self.main_app._all_weeks_data, ignore_index=True)
         df.columns = df.columns.str.strip()
         h_df = self.main_app.host_tab.hills_df.copy()
         h_df.columns = h_df.columns.str.strip()
-        
+
         target_col = 'Miejsca dla kibiców'
         if target_col in h_df.columns:
             h_df = h_df.rename(columns={target_col: 'Bilety'})
@@ -3197,58 +3280,67 @@ class EarningsFrame(ttk.Frame):
             h_df['Bilety'] = 0
         if 'Miasto' not in h_df.columns:
             h_df['Miasto'] = ""
-        
+
         hills = h_df[['Miasto', 'Bilety']].drop_duplicates(subset=['Miasto'])
-        
+
         try:
             df = pd.merge(df, hills, left_on='Skocznia', right_on='Miasto', how='left')
-        except Exception: return
+        except Exception:
+            return
 
         df['Bilety'] = pd.to_numeric(df['Bilety'].astype(str).str.replace(' ', ''), errors='coerce').fillna(0)
 
         order = [
-            'GP-M', 'GP-W', 'SCOC-M', 'SCOC-W', 'WC-M', 'WC-W', 'COC-M', 'COC-W', 
-            'FC-M', 'FC-W', 'JC-M', 'JC-W', 'MC-M', 'MC-W', 'PC-M', 'PC-W', 
+            'GP-M', 'GP-W', 'SCOC-M', 'SCOC-W', 'WC-M', 'WC-W', 'COC-M', 'COC-W',
+            'FC-M', 'FC-W', 'JC-M', 'JC-W', 'MC-M', 'MC-W', 'PC-M', 'PC-W',
             'QC-M', 'QC-W', 'TC-M', 'TC-W', 'AC-M', 'BC-M', 'CC-M', 'DC-M',
-            'OG', 'WCH', 'SFWC', 'NKIC', 'IST', 'YOG', 'UNI', 'JWC', 
+            'OG', 'WCH', 'SFWC', 'NKIC', 'IST', 'YOG', 'UNI', 'JWC',
             'COCH-EU', 'COCH-AS', 'COCH-NA', 'COCH-SA', 'COCH-AF', 'COCH-OC'
         ]
 
+        nations_rank = self._load_nations_ranking()
         processed_data = []
         unique_champs = set()
 
         for _, row in df.iterrows():
             seria = str(row['Seria'])
-            miasto_z_bazy = str(row['Miasto_y'] if 'Miasto_y' in row else row['Miasto']) 
-            if miasto_z_bazy == "nan": miasto_z_bazy = str(row['Skocznia'])
+            miasto_z_bazy = str(row['Miasto_y'] if 'Miasto_y' in row else row['Miasto'])
+            if miasto_z_bazy == "nan":
+                miasto_z_bazy = str(row['Skocznia'])
             kraj = str(row.get('NAT', '')).strip()
-            
+            dod_inf = str(row.get('Dod. inf.', '')).strip()
+
             base_seria = seria.split('-')[0]
             is_champ = base_seria in self.stats_champs
             lookup_seria = base_seria if is_champ else seria
 
             if is_champ:
                 key = (base_seria, miasto_z_bazy)
-                if key in unique_champs: continue
+                if key in unique_champs:
+                    continue
                 unique_champs.add(key)
 
             stats = self.stats_champs.get(lookup_seria) or self.stats_regular.get(lookup_seria)
-            if not stats: continue
-            
+            if not stats:
+                continue
+
             cena_bil, tv_val, personel = stats
             poj_skoczni = int(row['Bilety'])
+            frekwencja = self._compute_frekwencja(lookup_seria, dod_inf, kraj, nations_rank, is_champ)
+            kibice = int(poj_skoczni * frekwencja)
             mnoznik = math.floor(poj_skoczni / 1000)
             koszt_personelu = mnoznik * personel
-            
-            suma_bez_podatku = (poj_skoczni * cena_bil) + tv_val - (2 * koszt_personelu)
+
+            suma_bez_podatku = (kibice * cena_bil) + tv_val - (2 * koszt_personelu)
             podatek = self.calculate_tax(suma_bez_podatku)
             suma_final = suma_bez_podatku - podatek
-            
+
             processed_data.append({
                 "Cykl": lookup_seria if is_champ else seria,
                 "Kraj": kraj,
                 "Miasto": miasto_z_bazy,
                 "Bilety_Poj": poj_skoczni,
+                "Frekwencja": frekwencja,
                 "TV": tv_val,
                 "Ochrona": koszt_personelu,
                 "Przygotowanie": koszt_personelu,
@@ -3261,12 +3353,12 @@ class EarningsFrame(ttk.Frame):
 
         for d in processed_data:
             img = self.main_app._get_flag_image(d['Kraj'])
-            # NAT trafia do pierwszej kolumny 'values', Cykl zostaje w '#0' (z flagą)
             self.tv.insert("", "end", text=f" {d['Cykl']}", image=img,
                            values=(
                                d['Kraj'],
-                               d['Miasto'], 
+                               d['Miasto'],
                                f"{d['Bilety_Poj']:,}".replace(",", " "),
+                               f"{int(d['Frekwencja'] * 100)}%",
                                f"{d['TV']:,}".replace(",", " "),
                                f"{d['Ochrona']:,}".replace(",", " "),
                                f"{d['Przygotowanie']:,}".replace(",", " "),
@@ -3285,7 +3377,7 @@ class TotalEarningsFrame(ttk.Frame):
         self._setup_ui()
 
     def _get_season_suffix(self):
-        """Wyciąga numer sezonu (np. S45) z aktualnie wybranego folderu."""
+        """Wyciąga numer sezonu (np. S51) z aktualnie wybranego folderu."""
         # Używamy dir_var.get(), ponieważ to tam tkinter przechowuje aktualną ścieżkę
         if hasattr(self.main_app, 'dir_var'):
             folder_name = str(self.main_app.dir_var.get())
@@ -3295,7 +3387,7 @@ class TotalEarningsFrame(ttk.Frame):
         match = re.search(r'S\d+', folder_name, re.IGNORECASE)
         if match:
             return match.group(0).upper()
-        return "S45"
+        return "S51"
 
     def _load_prev_season_earnings(self):
         """Wczytuje Zysk Finalny krajów z poprzedniego sezonu."""
@@ -3418,9 +3510,9 @@ class TotalEarningsFrame(ttk.Frame):
     def export_to_csv(self):
         import csv
         import os
-        season = self._get_season_suffix()  # Pobiera np. "S45"
+        season = self._get_season_suffix()  # Pobiera np. "S51"
         
-        # Tworzenie ścieżki do folderu (np. ./S45)
+        # Tworzenie ścieżki do folderu (np. ./S51)
         folder_path = f"./{season}"
         if not os.path.exists(folder_path):
             os.makedirs(folder_path)
