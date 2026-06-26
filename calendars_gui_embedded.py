@@ -97,10 +97,10 @@ _POSSIBLE_TYPE_COLS = ["Typ", "Rodzaj", "Zawody", "Tryb", "Event"]
 # Minimalna klasa FIS wymagana do organizacji danego cyklu
 _CYCLE_MIN_FIS: dict[str, str] = {
     "OG":   "OLYMPIC CLASS",
-    "WCH":  "OLYMPIC CLASS",
-    "SFWC": "OLYMPIC CLASS",
-    "NKIC": "OLYMPIC CLASS",
-    "IST":  "OLYMPIC CLASS",
+    "WCH":  "WORLD CUP CLASS",
+    "SFWC": "WORLD CUP CLASS",
+    "NKIC": "WORLD CUP CLASS",
+    "IST":  "WORLD CUP CLASS",
     "WC":   "WORLD CUP CLASS",
     "GP":   "CONTINENTAL CUP CLASS",  # + wymagany igielit
     "SCOC": "JUNIOR CUP CLASS",       # + wymagany igielit
