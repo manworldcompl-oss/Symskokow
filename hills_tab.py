@@ -78,15 +78,39 @@ HOMOLOGATION_SPEC = {
 }
 
 # ── Klasa operacyjna: stałe ──────────────────────────────────────────────────
-_OP_CHOICES = ["Pełna", "COC", "Minimalna"]
-_OP_MULTIPLIERS = {"Pełna": 1.0, "COC": 0.6, "Minimalna": 0.2}
+_OP_CHOICES = ["Pełna", "Połowiczna", "Minimalna"]
+_OP_MULTIPLIERS = {"Pełna": 1.0, "Połowiczna": 0.6, "Minimalna": 0.2}
 
-_POC_SCORE = {"wyborny": 4, "dobry": 3, "sredni": 2, "sredni": 2, "niski": 1, "-": 0, "": 0}
+_POC_SCORE = {"wyborny": 4, "dobry": 3, "sredni": 2, "średni": 2, "niski": 1, "-": 0, "": 0}
 _TW_SCORE  = {"elektr.": 2, "elektr": 2, "zwykla": 1, "zwykła": 1, "-": 0, "": 0}
 _NAS_SCORE = {"b": 2, "a": 1, "-": 0, "": 0}
 
 _TW_DEGRADE  = {"elektr.": "zwykła", "elektr": "zwykła", "zwykła": "-", "zwykla": "-", "-": "-"}
 _NAS_DEGRADE = {"b": "A", "a": "-", "-": "-"}
+_POC_DEGRADE = {"wyborny": "dobry", "dobry": "średni", "sredni": "niski", "średni": "niski",
+                "niski": "-", "-": "-", "": "-"}
+_KK_DEGRADE  = {"poz 5": "poz 4", "poz 4": "poz 3", "poz 3": "poz 2",
+                "poz 2": "poz 1", "poz 1": "-", "-": "-", "": "-"}
+
+# Kolejność klas FIS (od najwyższej do najniższej)
+_FIS_CLASS_ORDER = [
+    "OLYMPIC CLASS", "WORLD CUP CLASS", "CONTINENTAL CUP CLASS", "JUNIOR CUP CLASS"
+]
+
+def _effective_fis_class(actual: str, op_class: str) -> str:
+    """Zwraca efektywną klasę FIS po uwzględnieniu klasy operacyjnej."""
+    actual_up = actual.strip().upper()
+    idx = next((i for i, c in enumerate(_FIS_CLASS_ORDER) if c in actual_up), None)
+    if op_class == "Pełna" or idx is None:
+        return actual
+    if op_class == "Połowiczna":
+        new_idx = idx + 1
+        return _FIS_CLASS_ORDER[new_idx] if new_idx < len(_FIS_CLASS_ORDER) else "-"
+    if op_class == "Minimalna":
+        if idx >= len(_FIS_CLASS_ORDER) - 1:
+            return "-"
+        return _FIS_CLASS_ORDER[-1]
+    return actual
 
 
 def _compute_current_fis_class(row) -> str:
@@ -136,7 +160,7 @@ def load_operational_classes(path) -> pd.DataFrame:
                 return df
             except Exception:
                 pass
-    return pd.DataFrame(columns=["Kraj", "Miasto", "Klasa", "Sezony_MIN"])
+    return pd.DataFrame(columns=["Kraj", "Miasto", "Klasa", "Sezony_POL", "Sezony_MIN"])
 
 
 def save_operational_classes(df: pd.DataFrame, path):
@@ -176,24 +200,43 @@ def apply_operational_multipliers(df_rows: pd.DataFrame, df_op: pd.DataFrame) ->
 def apply_season_end_degradation(df_op: pd.DataFrame, hills_path) -> tuple:
     """
     Przetwarza koniec sezonu:
-      • Minimalna → Sezony_MIN += 1 ; inaczej → 0
-      • Gdy Sezony_MIN osiągnie 3: degraduje Tw i Naś w Skocznie CSV, reset do 0
+      • Połowiczna → Sezony_POL += 1, Sezony_MIN = 0
+      • Minimalna  → Sezony_MIN += 1, Sezony_POL = 0
+      • Pełna      → oba liczniki = 0
+      • Sezony_POL >= 3  → degradacja infrastruktury, reset Sezony_POL
+      • Sezony_MIN >= 2  → degradacja infrastruktury, reset Sezony_MIN
+    Degradowane: Tw, Naś, Poc, Kk (o 1 poziom), OS (-500), Ks→-, Sia→-
     Zwraca (df_op_updated, lista komunikatów o degradacjach).
     """
     df = df_op.copy()
-    if "Sezony_MIN" not in df.columns:
-        df["Sezony_MIN"] = 0
-    df["Sezony_MIN"] = pd.to_numeric(df["Sezony_MIN"], errors="coerce").fillna(0).astype(int)
+    for col, default in (("Sezony_POL", 0), ("Sezony_MIN", 0)):
+        if col not in df.columns:
+            df[col] = 0
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0).astype(int)
 
     to_degrade = []
     for idx, row in df.iterrows():
         klasa = str(row.get("Klasa", "Pełna")).strip()
-        s = int(row.get("Sezony_MIN", 0))
-        s = s + 1 if klasa == "Minimalna" else 0
-        df.at[idx, "Sezony_MIN"] = s
-        if s >= 3:
-            to_degrade.append((str(row.get("Kraj", "")).strip().upper(),
-                                str(row.get("Miasto", "")).strip()))
+        sp = int(row.get("Sezony_POL", 0))
+        sm = int(row.get("Sezony_MIN", 0))
+
+        if klasa == "Połowiczna":
+            sp, sm = sp + 1, 0
+        elif klasa == "Minimalna":
+            sp, sm = 0, sm + 1
+        else:
+            sp, sm = 0, 0
+
+        df.at[idx, "Sezony_POL"] = sp
+        df.at[idx, "Sezony_MIN"] = sm
+
+        kraj  = str(row.get("Kraj",   "")).strip().upper()
+        miasto = str(row.get("Miasto", "")).strip()
+        if sp >= 3:
+            to_degrade.append((kraj, miasto))
+            df.at[idx, "Sezony_POL"] = 0
+        elif sm >= 2:
+            to_degrade.append((kraj, miasto))
             df.at[idx, "Sezony_MIN"] = 0
 
     messages = []
@@ -208,10 +251,18 @@ def apply_season_end_degradation(df_op: pd.DataFrame, hills_path) -> tuple:
                 pass
 
         if df_hills is not None:
-            tw_col  = next((c for c in df_hills.columns if _norm_str(c) == "tw"),  None)
-            nas_col = next((c for c in df_hills.columns if _norm_str(c) == "nas"), None)
-            kraj_col   = next((c for c in df_hills.columns if _norm_str(c) == "kraj"),  None)
-            miasto_col = next((c for c in df_hills.columns if _norm_str(c) == "miasto"), None)
+            def _find(name):
+                return next((c for c in df_hills.columns if _norm_str(c) == name), None)
+
+            tw_col  = _find("tw")
+            nas_col = _find("nas")
+            poc_col = _find("poc")
+            kk_col  = _find("kk")
+            os_col  = _find("os")
+            ks_col  = _find("ks")
+            sia_col = _find("sia")
+            kraj_col   = _find("kraj")
+            miasto_col = _find("miasto")
 
             changed = False
             for kraj, miasto in to_degrade:
@@ -238,6 +289,44 @@ def apply_season_end_degradation(df_op: pd.DataFrame, hills_path) -> tuple:
                         if new and new != old.upper() and new != old:
                             parts.append(f"Naś: {old.upper()}→{new}")
                             df_hills.at[ridx, nas_col] = new
+                            changed = True
+                    if poc_col:
+                        old = _norm_str(df_hills.at[ridx, poc_col])
+                        new = _POC_DEGRADE.get(old)
+                        if new and new != old:
+                            parts.append(f"Poc: {old}→{new}")
+                            df_hills.at[ridx, poc_col] = new
+                            changed = True
+                    if kk_col:
+                        old = str(df_hills.at[ridx, kk_col]).strip().lower()
+                        new = _KK_DEGRADE.get(old)
+                        if new and new != old:
+                            parts.append(f"Kk: {old}→{new}")
+                            df_hills.at[ridx, kk_col] = new
+                            changed = True
+                    if os_col:
+                        raw = str(df_hills.at[ridx, os_col]).strip()
+                        try:
+                            val = int(float(raw))
+                            new_val = max(0, val - 500)
+                            new_str = str(new_val) if new_val > 0 else "-"
+                            if new_str != raw:
+                                parts.append(f"OS: {raw}→{new_str}")
+                                df_hills.at[ridx, os_col] = new_str
+                                changed = True
+                        except ValueError:
+                            pass
+                    if ks_col:
+                        old = str(df_hills.at[ridx, ks_col]).strip()
+                        if old not in ("-", ""):
+                            parts.append(f"Ks: {old}→-")
+                            df_hills.at[ridx, ks_col] = "-"
+                            changed = True
+                    if sia_col:
+                        old = str(df_hills.at[ridx, sia_col]).strip()
+                        if old not in ("-", ""):
+                            parts.append(f"Sia: {old}→-")
+                            df_hills.at[ridx, sia_col] = "-"
                             changed = True
                 if parts:
                     messages.append(f"{kraj} / {miasto}: {', '.join(parts)}")
@@ -3771,7 +3860,7 @@ class OperationalClassTab(ttk.Frame):
     def __init__(self, parent, hills_tab_ref):
         super().__init__(parent)
         self._ht = hills_tab_ref
-        self._data: dict = {}         # (Kraj, Miasto) → {"Klasa": str, "Sezony_MIN": int}
+        self._data: dict = {}         # (Kraj, Miasto) → {"Klasa": str, "Sezony_POL": int, "Sezony_MIN": int}
         self._full_costs: dict = {}   # (Kraj, Miasto) → int
         self._fis_classes: dict = {}  # (Kraj, Miasto) → str
         self._build_ui()
@@ -3804,7 +3893,7 @@ class OperationalClassTab(ttk.Frame):
         # Tabela
         wrap = ttk.Frame(self)
         wrap.pack(fill="both", expand=True, padx=8, pady=(0, 4))
-        cols = ["Miasto", "Klasa FIS", "Klasa op.", "Sezony MIN", "Koszt pełny €", "Koszt efektywny €"]
+        cols = ["Miasto", "Klasa FIS", "Klasa eff.", "Klasa op.", "Sez. POL", "Sez. MIN", "Koszt pełny €", "Koszt efektywny €"]
         self._tv = ttk.Treeview(wrap, columns=cols, show="tree headings", height=16, selectmode="extended")
         vsb = ttk.Scrollbar(wrap, orient="vertical",   command=self._tv.yview)
         hsb = ttk.Scrollbar(wrap, orient="horizontal", command=self._tv.xview)
@@ -3817,15 +3906,15 @@ class OperationalClassTab(ttk.Frame):
 
         self._tv.heading("#0", text="Kraj")
         self._tv.column("#0", width=100, anchor="w")
-        widths = {"Miasto": 120, "Klasa FIS": 175, "Klasa op.": 95,
-                  "Sezony MIN": 80, "Koszt pełny €": 120, "Koszt efektywny €": 130}
+        widths = {"Miasto": 120, "Klasa FIS": 175, "Klasa eff.": 175, "Klasa op.": 95,
+                  "Sez. POL": 65, "Sez. MIN": 65, "Koszt pełny €": 120, "Koszt efektywny €": 130}
         for c in cols:
             self._tv.heading(c, text=c)
             self._tv.column(c, width=widths.get(c, 100), anchor="center")
 
         self._tv.tag_configure("min", foreground="#cc3300")
-        self._tv.tag_configure("coc", foreground="#886600")
-        self._tv.tag_configure("warn", background="#fff3cd")  # żółte ostrzeżenie (Sezony_MIN == 2)
+        self._tv.tag_configure("pol", foreground="#886600")
+        self._tv.tag_configure("warn", background="#fff3cd")  # żółte ostrzeżenie (zbliżenie do progu degradacji)
 
         # Podsumowanie
         self._summary_var = tk.StringVar(value="")
@@ -3867,8 +3956,10 @@ class OperationalClassTab(ttk.Frame):
         df_op = load_operational_classes(op_path)
         for _, r in df_op.iterrows():
             key = (str(r.get("Kraj", "")).strip().upper(), str(r.get("Miasto", "")).strip())
-            self._data.setdefault(key, {"Klasa": "Pełna", "Sezony_MIN": 0})
+            self._data.setdefault(key, {"Klasa": "Pełna", "Sezony_POL": 0, "Sezony_MIN": 0})
             self._data[key]["Klasa"] = str(r.get("Klasa", "Pełna")).strip()
+            self._data[key]["Sezony_POL"] = int(
+                pd.to_numeric(r.get("Sezony_POL", 0), errors="coerce") or 0)
             self._data[key]["Sezony_MIN"] = int(
                 pd.to_numeric(r.get("Sezony_MIN", 0), errors="coerce") or 0)
 
@@ -3884,12 +3975,14 @@ class OperationalClassTab(ttk.Frame):
             miasto = str(r.get("Miasto", "")).strip()
             key    = (kraj, miasto)
 
-            entry     = self._data.get(key, {"Klasa": "Pełna", "Sezony_MIN": 0})
-            klasa_op  = entry.get("Klasa", "Pełna")
-            sezony    = entry.get("Sezony_MIN", 0)
-            full_cost = self._full_costs.get(key, 0)
-            eff_cost  = int(full_cost * _OP_MULTIPLIERS.get(klasa_op, 1.0))
-            fis_cls   = self._fis_classes.get(key, "—")
+            entry      = self._data.get(key, {"Klasa": "Pełna", "Sezony_POL": 0, "Sezony_MIN": 0})
+            klasa_op   = entry.get("Klasa", "Pełna")
+            sezony_pol = entry.get("Sezony_POL", 0)
+            sezony_min = entry.get("Sezony_MIN", 0)
+            full_cost  = self._full_costs.get(key, 0)
+            eff_cost   = int(full_cost * _OP_MULTIPLIERS.get(klasa_op, 1.0))
+            fis_cls    = self._fis_classes.get(key, "—")
+            eff_fis    = _effective_fis_class(fis_cls, klasa_op)
 
             total_full += full_cost
             total_eff  += eff_cost
@@ -3897,13 +3990,15 @@ class OperationalClassTab(ttk.Frame):
             tags = []
             if klasa_op == "Minimalna":
                 tags.append("min")
-            elif klasa_op == "COC":
-                tags.append("coc")
-            if sezony == 2:
+            elif klasa_op == "Połowiczna":
+                tags.append("pol")
+            # Warn: zbliżenie do progu degradacji (Połowiczna: 2/3, Minimalna: 1/2)
+            if (klasa_op == "Połowiczna" and sezony_pol >= 2) or \
+               (klasa_op == "Minimalna"  and sezony_min >= 1):
                 tags.append("warn")
 
             self._tv.insert("", "end", iid=f"{kraj}|{miasto}", text=kraj,
-                values=[miasto, fis_cls, klasa_op, sezony,
+                values=[miasto, fis_cls, eff_fis, klasa_op, sezony_pol, sezony_min,
                         f"{full_cost:,}".replace(",", " "),
                         f"{eff_cost:,}".replace(",", " ")],
                 tags=tuple(tags))
@@ -3926,7 +4021,7 @@ class OperationalClassTab(ttk.Frame):
             parts = iid.split("|", 1)
             if len(parts) == 2:
                 key = (parts[0], parts[1])
-                self._data.setdefault(key, {"Sezony_MIN": 0})
+                self._data.setdefault(key, {"Sezony_POL": 0, "Sezony_MIN": 0})
                 self._data[key]["Klasa"] = new_klasa
         df_c = self._get_complexes()
         if not df_c.empty:
@@ -3936,10 +4031,12 @@ class OperationalClassTab(ttk.Frame):
     def _save(self):
         rows = [
             {"Kraj": k[0], "Miasto": k[1],
-             "Klasa": v.get("Klasa", "Pełna"), "Sezony_MIN": v.get("Sezony_MIN", 0)}
+             "Klasa": v.get("Klasa", "Pełna"),
+             "Sezony_POL": v.get("Sezony_POL", 0),
+             "Sezony_MIN": v.get("Sezony_MIN", 0)}
             for k, v in self._data.items()
         ]
-        df = pd.DataFrame(rows, columns=["Kraj", "Miasto", "Klasa", "Sezony_MIN"])
+        df = pd.DataFrame(rows, columns=["Kraj", "Miasto", "Klasa", "Sezony_POL", "Sezony_MIN"])
         op_path = self._path_var.get().strip()
         save_operational_classes(df, op_path)
         self._ht._op_class_path = op_path
@@ -3949,18 +4046,21 @@ class OperationalClassTab(ttk.Frame):
         if not messagebox.askyesno(
             "Zakończ sezon",
             "Przetworzyć koniec sezonu?\n"
-            "• Sezony_MIN zostanie zaktualizowane\n"
-            "• Kompleksy z 3+ sezonami na Minimalnej: degradacja Tw i Naś w pliku Skocznie",
+            "• Połowiczna: Sezony_POL += 1; po 3 sezonach — degradacja infrastruktury\n"
+            "• Minimalna:  Sezony_MIN += 1; po 2 sezonach — degradacja infrastruktury\n"
+            "• Przejście między klasami zeruje licznik drugiej klasy",
             parent=self
         ):
             return
 
         rows = [
             {"Kraj": k[0], "Miasto": k[1],
-             "Klasa": v.get("Klasa", "Pełna"), "Sezony_MIN": v.get("Sezony_MIN", 0)}
+             "Klasa": v.get("Klasa", "Pełna"),
+             "Sezony_POL": v.get("Sezony_POL", 0),
+             "Sezony_MIN": v.get("Sezony_MIN", 0)}
             for k, v in self._data.items()
         ]
-        df_op = pd.DataFrame(rows, columns=["Kraj", "Miasto", "Klasa", "Sezony_MIN"])
+        df_op = pd.DataFrame(rows, columns=["Kraj", "Miasto", "Klasa", "Sezony_POL", "Sezony_MIN"])
 
         hills_path_str = getattr(self._ht.hills_viewer, "var_path", tk.StringVar()).get().strip()
         df_op_new, messages = apply_season_end_degradation(df_op, hills_path_str)
@@ -3969,7 +4069,8 @@ class OperationalClassTab(ttk.Frame):
         for _, r in df_op_new.iterrows():
             key = (str(r["Kraj"]).strip().upper(), str(r["Miasto"]).strip())
             self._data.setdefault(key, {"Klasa": "Pełna"})
-            self._data[key]["Sezony_MIN"] = int(r["Sezony_MIN"])
+            self._data[key]["Sezony_POL"] = int(r.get("Sezony_POL", 0))
+            self._data[key]["Sezony_MIN"] = int(r.get("Sezony_MIN", 0))
 
         op_path = self._path_var.get().strip()
         save_operational_classes(df_op_new, op_path)
