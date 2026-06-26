@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 ranking_fis_gui_embedded.py — Ranking FIS (MEN / WOMEN / ALL + tabela punktów)

@@ -1,4 +1,4 @@
-
+﻿
 # === Global GUI-friendly exception hook (auto-log + message box + pause) ===
 
 

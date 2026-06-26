@@ -1,4 +1,4 @@
-# Biblioteki standardowe
+﻿# Biblioteki standardowe
 import os
 import glob
 import re
