@@ -3838,7 +3838,9 @@ class OperationalClassTab(ttk.Frame):
 
     def _get_complexes(self) -> pd.DataFrame:
         try:
-            df_h = getattr(self._ht.hills_viewer, "df", None) or getattr(self._ht.hills_viewer, "_df", None)
+            df_h = getattr(self._ht.hills_viewer, "df", None)
+            if df_h is None:
+                df_h = getattr(self._ht.hills_viewer, "_df", None)
             return build_complexes_from_hills(df_h)
         except Exception:
             return pd.DataFrame()
