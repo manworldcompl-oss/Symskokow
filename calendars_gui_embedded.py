@@ -88,6 +88,42 @@ _DEF_COLOR_RULES = {
 
 _POSSIBLE_TYPE_COLS = ["Typ", "Rodzaj", "Zawody", "Tryb", "Event"]
 
+# ===================== Frekwencja (attendance) =====================
+
+_FREKWENCJA_BASE: dict[str, float] = {
+    "WC-M": 0.70, "WC-W": 0.70,
+    "GP-M": 0.60, "GP-W": 0.60,
+    "COC-M": 0.60, "COC-W": 0.60,
+    "FC-M": 0.50, "FC-W": 0.50,
+    "SCOC-M": 0.50, "SCOC-W": 0.50,
+    "JC-M": 0.40, "JC-W": 0.40,
+    "MC-M": 0.35, "MC-W": 0.35,
+    "PC-M": 0.32, "PC-W": 0.32,
+    "QC-M": 0.29, "QC-W": 0.29,
+    "TC-M": 0.26, "TC-W": 0.26,
+    "AC-M": 0.24, "AC-W": 0.24,
+    "BC-M": 0.22, "BC-W": 0.22,
+    "DC-M": 0.20, "DC-W": 0.20,
+    # Mistrzostwa (klucz = base_seria)
+    "OG": 1.00, "WCH": 0.90, "SFWC": 0.80,
+    "NKIC": 0.80, "IST": 0.80, "COCH": 0.75,
+    "JWC": 0.65, "YOG": 0.50, "UNI": 0.50,
+}
+
+_TURNIEJE_BONUS: dict[str, float] = {
+    "TCS": 0.22, "RA": 0.13, "NT": 0.10,
+    "FT": 0.08, "BB": 0.08, "W5": 0.07, "P7": 0.06,
+}
+
+# (rank_max_inclusive, bonus)
+_KRAJ_BONUS_TIERS: list[tuple[int, float]] = [
+    (5,  0.00),
+    (10, 0.03),
+    (20, 0.07),
+    (35, 0.12),
+    (9999, 0.18),
+]
+
 def _reorder_columns_case_insensitive(df: pd.DataFrame, desired: list[str]) -> list[str]:
     """Zwraca listę kolumn DF w kolejności desired (case-insensitive),
     a na końcu dorzuca resztę kolumn w ich obecnej kolejności.
@@ -3131,20 +3167,18 @@ class EarningsFrame(ttk.Frame):
         wrap = ttk.Frame(self)
         wrap.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        # Dodano 'NAT' do listy kolumn
-        self.cols = ("NAT", "Miasto", "Bilety", "TV", "Ochrona", "Przygotowanie", "Suma_Netto", "Podatek", "Suma_Brutto")
+        self.cols = ("NAT", "Miasto", "Pojemność", "Frekwencja", "TV", "Ochrona", "Przygotowanie", "Suma_Netto", "Podatek", "Suma_Brutto")
         self.tv = ttk.Treeview(wrap, columns=self.cols, show="tree headings")
-        
+
         self.tv.heading("#0", text="Cykl", command=lambda: self.sort_column("#0"))
         self.tv.column("#0", width=120)
-        
-        # Nagłówki wyświetlane
-        display_headers = ["NAT", "Miasto", "Bilety", "TV", "Ochrona", "Przygotowanie", "Suma (Netto)", "Podatek", "Suma (Finał)"]
+
+        display_headers = ["NAT", "Miasto", "Pojemność", "Frekwencja %", "TV", "Ochrona", "Przygotowanie", "Suma (Netto)", "Podatek", "Suma (Finał)"]
+        col_widths = {"NAT": 60, "Miasto": 110, "Pojemność": 90, "Frekwencja": 85}
         for col_id, text in zip(self.cols, display_headers):
             self.tv.heading(col_id, text=text, command=lambda c=col_id: self.sort_column(c))
-            # NAT i Miasto wyrównane do lewej, reszta do prawej (liczby)
             anchor = tk.W if col_id in ["NAT", "Miasto"] else tk.E
-            width = 60 if col_id == "NAT" else 110
+            width = col_widths.get(col_id, 110)
             self.tv.column(col_id, width=width, anchor=anchor)
 
         vsb = ttk.Scrollbar(wrap, orient="vertical", command=self.tv.yview)
@@ -3177,6 +3211,55 @@ class EarningsFrame(ttk.Frame):
         elif pre_tax <= 600000: return pre_tax * 0.24
         else: return pre_tax * 0.30
 
+    def _get_season_suffix(self) -> str:
+        if hasattr(self.main_app, 'dir_var'):
+            folder_name = str(self.main_app.dir_var.get())
+        else:
+            folder_name = str(getattr(self.main_app, 'cal_dir', 'S45'))
+        m = re.search(r'S\d+', folder_name, re.IGNORECASE)
+        return m.group(0).upper() if m else "S45"
+
+    def _load_nations_ranking(self) -> dict[str, int]:
+        """Wczytuje klasyfikację WC-M narody → {NAT: pozycja}."""
+        try:
+            season = self._get_season_suffix()
+            path = Path(f"./{season}/Klasyfikacje {season}/{season}_WC-M__nations.csv")
+            if not path.exists():
+                return {}
+            import pandas as pd
+            df = pd.read_csv(path, sep=';', encoding='utf-8-sig', dtype=str)
+            df.columns = [c.strip().upper() for c in df.columns]
+            nat_col = next((c for c in df.columns if c in ('NAT', 'KRAJ')), None)
+            if nat_col is None:
+                return {}
+            lp_col = next((c for c in df.columns if c in ('LP.', 'LP')), None)
+            result: dict[str, int] = {}
+            for i, (_, row) in enumerate(df.iterrows()):
+                nat = str(row[nat_col]).strip()
+                if not nat or nat == 'nan':
+                    continue
+                if lp_col:
+                    try:
+                        pos = int(float(str(row[lp_col]).replace(' ', '')))
+                    except Exception:
+                        pos = i + 1
+                else:
+                    pos = i + 1
+                result[nat] = pos
+            return result
+        except Exception:
+            return {}
+
+    def _compute_frekwencja(self, lookup_seria: str, dod_inf: str,
+                            kraj: str, nations_rank: dict[str, int],
+                            is_champ: bool) -> float:
+        base = _FREKWENCJA_BASE.get(lookup_seria, 0.20)
+        turniej_bonus = _TURNIEJE_BONUS.get(str(dod_inf).strip().upper(), 0.0) if not is_champ else 0.0
+        rank = nations_rank.get(kraj, 9999)
+        kraj_bonus = next(bonus for cap, bonus in _KRAJ_BONUS_TIERS if rank <= cap)
+        max_cap = 1.00 if lookup_seria == "OG" else 0.97
+        return min(max_cap, base + turniej_bonus + kraj_bonus)
+
     def refresh_data(self):
         for i in self.tv.get_children(): self.tv.delete(i)
         if not hasattr(self.main_app, '_all_weeks_data') or not self.main_app._all_weeks_data:
@@ -3184,12 +3267,12 @@ class EarningsFrame(ttk.Frame):
 
         import pandas as pd
         import math
-        
+
         df = pd.concat(self.main_app._all_weeks_data, ignore_index=True)
         df.columns = df.columns.str.strip()
         h_df = self.main_app.host_tab.hills_df.copy()
         h_df.columns = h_df.columns.str.strip()
-        
+
         target_col = 'Miejsca dla kibiców'
         if target_col in h_df.columns:
             h_df = h_df.rename(columns={target_col: 'Bilety'})
@@ -3197,58 +3280,67 @@ class EarningsFrame(ttk.Frame):
             h_df['Bilety'] = 0
         if 'Miasto' not in h_df.columns:
             h_df['Miasto'] = ""
-        
+
         hills = h_df[['Miasto', 'Bilety']].drop_duplicates(subset=['Miasto'])
-        
+
         try:
             df = pd.merge(df, hills, left_on='Skocznia', right_on='Miasto', how='left')
-        except Exception: return
+        except Exception:
+            return
 
         df['Bilety'] = pd.to_numeric(df['Bilety'].astype(str).str.replace(' ', ''), errors='coerce').fillna(0)
 
         order = [
-            'GP-M', 'GP-W', 'SCOC-M', 'SCOC-W', 'WC-M', 'WC-W', 'COC-M', 'COC-W', 
-            'FC-M', 'FC-W', 'JC-M', 'JC-W', 'MC-M', 'MC-W', 'PC-M', 'PC-W', 
+            'GP-M', 'GP-W', 'SCOC-M', 'SCOC-W', 'WC-M', 'WC-W', 'COC-M', 'COC-W',
+            'FC-M', 'FC-W', 'JC-M', 'JC-W', 'MC-M', 'MC-W', 'PC-M', 'PC-W',
             'QC-M', 'QC-W', 'TC-M', 'TC-W', 'AC-M', 'BC-M', 'CC-M', 'DC-M',
-            'OG', 'WCH', 'SFWC', 'NKIC', 'IST', 'YOG', 'UNI', 'JWC', 
+            'OG', 'WCH', 'SFWC', 'NKIC', 'IST', 'YOG', 'UNI', 'JWC',
             'COCH-EU', 'COCH-AS', 'COCH-NA', 'COCH-SA', 'COCH-AF', 'COCH-OC'
         ]
 
+        nations_rank = self._load_nations_ranking()
         processed_data = []
         unique_champs = set()
 
         for _, row in df.iterrows():
             seria = str(row['Seria'])
-            miasto_z_bazy = str(row['Miasto_y'] if 'Miasto_y' in row else row['Miasto']) 
-            if miasto_z_bazy == "nan": miasto_z_bazy = str(row['Skocznia'])
+            miasto_z_bazy = str(row['Miasto_y'] if 'Miasto_y' in row else row['Miasto'])
+            if miasto_z_bazy == "nan":
+                miasto_z_bazy = str(row['Skocznia'])
             kraj = str(row.get('NAT', '')).strip()
-            
+            dod_inf = str(row.get('Dod. inf.', '')).strip()
+
             base_seria = seria.split('-')[0]
             is_champ = base_seria in self.stats_champs
             lookup_seria = base_seria if is_champ else seria
 
             if is_champ:
                 key = (base_seria, miasto_z_bazy)
-                if key in unique_champs: continue
+                if key in unique_champs:
+                    continue
                 unique_champs.add(key)
 
             stats = self.stats_champs.get(lookup_seria) or self.stats_regular.get(lookup_seria)
-            if not stats: continue
-            
+            if not stats:
+                continue
+
             cena_bil, tv_val, personel = stats
             poj_skoczni = int(row['Bilety'])
+            frekwencja = self._compute_frekwencja(lookup_seria, dod_inf, kraj, nations_rank, is_champ)
+            kibice = int(poj_skoczni * frekwencja)
             mnoznik = math.floor(poj_skoczni / 1000)
             koszt_personelu = mnoznik * personel
-            
-            suma_bez_podatku = (poj_skoczni * cena_bil) + tv_val - (2 * koszt_personelu)
+
+            suma_bez_podatku = (kibice * cena_bil) + tv_val - (2 * koszt_personelu)
             podatek = self.calculate_tax(suma_bez_podatku)
             suma_final = suma_bez_podatku - podatek
-            
+
             processed_data.append({
                 "Cykl": lookup_seria if is_champ else seria,
                 "Kraj": kraj,
                 "Miasto": miasto_z_bazy,
                 "Bilety_Poj": poj_skoczni,
+                "Frekwencja": frekwencja,
                 "TV": tv_val,
                 "Ochrona": koszt_personelu,
                 "Przygotowanie": koszt_personelu,
@@ -3261,12 +3353,12 @@ class EarningsFrame(ttk.Frame):
 
         for d in processed_data:
             img = self.main_app._get_flag_image(d['Kraj'])
-            # NAT trafia do pierwszej kolumny 'values', Cykl zostaje w '#0' (z flagą)
             self.tv.insert("", "end", text=f" {d['Cykl']}", image=img,
                            values=(
                                d['Kraj'],
-                               d['Miasto'], 
+                               d['Miasto'],
                                f"{d['Bilety_Poj']:,}".replace(",", " "),
+                               f"{int(d['Frekwencja'] * 100)}%",
                                f"{d['TV']:,}".replace(",", " "),
                                f"{d['Ochrona']:,}".replace(",", " "),
                                f"{d['Przygotowanie']:,}".replace(",", " "),
