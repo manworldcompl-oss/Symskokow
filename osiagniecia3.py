@@ -198,7 +198,7 @@ class SportsApp(QMainWindow):
         grupy = [
             ("MĘŻCZYŹNI I", ["WCM_TCS.csv", "WCM_RAW_AIR.csv", "WCM_PLANICA7.csv", "WCM_WILLINGEN5.csv"], "4x1"),
             ("MĘŻCZYŹNI II", ["WCM_SKI_FLYING.csv", "WCM_NEW_TOURNAMENT.csv", "WCM_FINAL_TOURNAMENT.csv"], "3x1"),
-            ("KOBIETY", ["WCW_RAW_AIR.csv", "WCW_BLUE_BIRD.csv", "WCW_SKI_FLYING.csv"], "3x1")
+            ("KOBIETY", ["WCW_RAW_AIR.csv", "WCW_BLUE_BIRD.csv", "WCW_FNT.csv", "WCW_SKI_FLYING.csv"], "4x1")
         ]
 
         for nazwa, pliki, uklad in grupy:
@@ -506,6 +506,7 @@ class SportsApp(QMainWindow):
             ("FINAL TOURN", ["WCM_FINAL_TOURNAMENT.csv"]),
             ("RAW AIR (W)", ["WCW_RAW_AIR.csv"]),
             ("BLUE BIRD", ["WCW_BLUE_BIRD.csv"]),
+            ("FNT", ["WCW_FNT.csv"]),
             ("LOTY (W)", ["WCW_SKI_FLYING.csv"])
         ]
 
@@ -633,6 +634,7 @@ class SportsApp(QMainWindow):
             "WCM_FINAL_TOURNAMENT": "FINAL TOURNAMENT",
             "WCW_RAW_AIR": "RAW AIR (W)",
             "WCW_BLUE_BIRD": "BLUE BIRD",
+            "WCW_FNT": "FNT (Turniej Czterech Nocy)",
             "WCW_SKI_FLYING": "LOTY NARCIARSKIE (W)"
         }
         
@@ -641,7 +643,8 @@ class SportsApp(QMainWindow):
         for f in filenames:
             path = os.path.join(self.data_path, f)
             if os.path.exists(path):
-                df = pd.read_csv(path, sep=';', header=None, encoding='cp1250')
+                df = pd.read_csv(path, sep=';', header=None, encoding='cp1250',
+                                 dtype=str, on_bad_lines='skip').fillna("")
                 data_frames.append(df)
             else:
                 data_frames.append(pd.DataFrame()) # Pusty DF jeśli plik nie istnieje
@@ -650,7 +653,7 @@ class SportsApp(QMainWindow):
 
         # 2. Pobranie unikalnych sezonów
         all_data = pd.concat([df for df in data_frames if not df.empty])
-        sezony = sorted(all_data[0].unique(), reverse=False)
+        sezony = sorted(all_data[0].unique(), key=lambda x: int(str(x).strip()))
 
         for sezon in sezony:
             # Nagłówek sezonu na środku
@@ -959,7 +962,7 @@ class SportsApp(QMainWindow):
         btn_refresh.clicked.connect(self.odswiez_dane)
         layout.addWidget(btn_refresh, alignment=Qt.AlignCenter)
 
-        layout.addSpacerItem(QSpacerItem(0, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+        layout.addItem(QSpacerItem(0, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
 
     # ---------------------------------------------------------
     # HELPERS
@@ -1210,7 +1213,16 @@ class SportsApp(QMainWindow):
         'FT':         'WCM_FINAL_TOURNAMENT.csv',
         'RAWAIR-W':   'WCW_RAW_AIR.csv',
         'BB':         'WCW_BLUE_BIRD.csv',
+        'FNT':        'WCW_FNT.csv',
         'SKI_FLYING_W':'WCW_SKI_FLYING.csv',
+    }
+
+    # Turnieje które mają plik źródłowy w formacie __players.csv
+    # (LP.;JUMPER;NAT;PTS;1;2;3) zamiast standardowego (LP.;JUMPER;NAT;K1;...;Overall)
+    # Mapowanie: suffix_players → dest_file
+    TURNIEJE_PLAYERS_MAP = {
+        'SKI_FLYING_M': 'WCM_SKI_FLYING.csv',
+        'SKI_FLYING_W': 'WCW_SKI_FLYING.csv',
     }
 
     def aktualizuj_turnieje(self):
@@ -1228,7 +1240,11 @@ class SportsApp(QMainWindow):
         results = []
         dest_dir = self.data_path
 
+        # --- Standardowe turnieje (LP.;JUMPER;NAT;K1;...;Overall) ---
+        # SKI_FLYING jest obsługiwany osobno poniżej przez __players.csv
         for suffix, dest_file in self.TURNIEJE_MAP.items():
+            if suffix in self.TURNIEJE_PLAYERS_MAP:
+                continue  # obsługiwane niżej
             fname = f"{season}_{suffix}.csv"
             path  = os.path.join(folder, fname)
             if not os.path.exists(path):
@@ -1253,6 +1269,38 @@ class SportsApp(QMainWindow):
             added = self._append_rows(dest, rows, season_num)
             if added > 0:
                 results.append(f"✓ {dest_file}: +{added} wierszy")
+            else:
+                results.append(f"— {dest_file}: sezon już istnieje")
+
+        # --- Turnieje z plikiem __players.csv (LP.;JUMPER;NAT;PTS;1;2;3) ---
+        # Szukamy najnowszego (maksymalnego) PTS dla każdego zawodnika z miejsc 1-3
+        for suffix, dest_file in self.TURNIEJE_PLAYERS_MAP.items():
+            fname = f"{season}_{suffix}__players.csv"
+            path  = os.path.join(folder, fname)
+            if not os.path.exists(path):
+                results.append(f"— {dest_file}: brak pliku {fname}")
+                continue
+
+            df, sep = self._read_source_autodet(path)
+            if df is None or len(df.columns) < 4:
+                results.append(f"✗ {fname}: błąd odczytu lub za mało kolumn")
+                continue
+
+            # Format: LP.(0) ; JUMPER(1) ; NAT(2) ; PTS(3) ; K1(4) ; K2(5) ; ...
+            # Kolumna LP. to ranking końcowy, PTS to łączne punkty
+            rows = []
+            for _, r in df.iterrows():
+                msc  = str(r.iloc[0]).strip()
+                name = str(r.iloc[1]).strip()
+                nat  = str(r.iloc[2]).strip()
+                pts  = str(r.iloc[3]).strip()   # kolumna PTS (łączny wynik turnieju)
+                if msc in ('1', '2', '3'):
+                    rows.append([season_num, f"{msc}.", name, nat, pts])
+
+            dest = os.path.join(dest_dir, dest_file)
+            added = self._append_rows(dest, rows, season_num)
+            if added > 0:
+                results.append(f"✓ {dest_file}: +{added} wierszy (z {fname})")
             else:
                 results.append(f"— {dest_file}: sezon już istnieje")
 
@@ -1329,12 +1377,23 @@ class SportsApp(QMainWindow):
         'IST_M_IND_NORMAL':     'IST_IND_M_NH.csv',
         'IST_W_IND_LARGE':      'IST_IND_W_LH.csv',
         'IST_W_IND_NORMAL':     'IST_IND_W_NH.csv',
-        # COCH kontynenty
+        # COCH kontynenty (z podkreślnikiem – pliki docelowe)
         **{f'COCH_{k}_M_IND':    f'COCH_{k}_IND_M.csv'    for k in ['EUROPE','ASIA','NORTH_AMERICA','SOUTH_AMERICA','AFRICA','OCEANIA']},
         **{f'COCH_{k}_W_IND':    f'COCH_{k}_IND_W.csv'    for k in ['EUROPE','ASIA','NORTH_AMERICA','SOUTH_AMERICA','AFRICA','OCEANIA']},
         **{f'COCH_{k}_M_TEAM':   f'COCH_{k}_TEAM_M.csv'   for k in ['EUROPE','ASIA','NORTH_AMERICA','SOUTH_AMERICA','AFRICA','OCEANIA']},
         **{f'COCH_{k}_W_TEAM':   f'COCH_{k}_TEAM_W.csv'   for k in ['EUROPE','ASIA','NORTH_AMERICA','SOUTH_AMERICA','AFRICA','OCEANIA']},
         **{f'COCH_{k}_X_TEAM':   f'COCH_{k}_TEAM_MIX.csv' for k in ['EUROPE','ASIA','NORTH_AMERICA','SOUTH_AMERICA','AFRICA','OCEANIA']},
+        # COCH North/South America – pliki źródłowe bez podkreślnika (NORTHAMERICA / SOUTHAMERICA)
+        'COCH_NORTHAMERICA_M_IND':  'COCH_NORTH_AMERICA_IND_M.csv',
+        'COCH_NORTHAMERICA_W_IND':  'COCH_NORTH_AMERICA_IND_W.csv',
+        'COCH_NORTHAMERICA_M_TEAM': 'COCH_NORTH_AMERICA_TEAM_M.csv',
+        'COCH_NORTHAMERICA_W_TEAM': 'COCH_NORTH_AMERICA_TEAM_W.csv',
+        'COCH_NORTHAMERICA_X_TEAM': 'COCH_NORTH_AMERICA_TEAM_MIX.csv',
+        'COCH_SOUTHAMERICA_M_IND':  'COCH_SOUTH_AMERICA_IND_M.csv',
+        'COCH_SOUTHAMERICA_W_IND':  'COCH_SOUTH_AMERICA_IND_W.csv',
+        'COCH_SOUTHAMERICA_M_TEAM': 'COCH_SOUTH_AMERICA_TEAM_M.csv',
+        'COCH_SOUTHAMERICA_W_TEAM': 'COCH_SOUTH_AMERICA_TEAM_W.csv',
+        'COCH_SOUTHAMERICA_X_TEAM': 'COCH_SOUTH_AMERICA_TEAM_MIX.csv',
     }
 
     # Pliki IST i NKIC mają w docelowym formacie W/F/SF zamiast 1./2./3.

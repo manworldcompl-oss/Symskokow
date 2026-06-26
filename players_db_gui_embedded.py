@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 players_db_gui_embedded
@@ -216,13 +216,16 @@ class PlayerDBFrame(ttk.Frame):
         # pole ścieżki + przycisk Wczytaj + przeglądaj
         default_path = None
         try:
-            # preferowany plik domyślny
-            cand = Path("S51/Zawodnicy S51gpt.csv")
-            cand2 = Path("/mnt/data/Zawodnicy S51gpt.csv")
-            if cand.exists():
-                default_path = str(cand.resolve())
-            elif cand2.exists():
-                default_path = str(cand2.resolve())
+            _script_dir = Path(__file__).resolve().parent
+            candidates = [
+                Path("S51/Zawodnicy S51gpt.csv"),
+                _script_dir / "S51" / "Zawodnicy S51gpt.csv",
+                Path("/mnt/data/Zawodnicy S51gpt.csv"),
+            ]
+            for _cand in candidates:
+                if _cand.exists():
+                    default_path = str(_cand.resolve())
+                    break
         except Exception:
             default_path = None
 

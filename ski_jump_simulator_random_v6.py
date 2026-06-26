@@ -103,7 +103,7 @@ def _sanitize_df_STRONG(df) -> pd.DataFrame:
             out[c] = out[c].map(_cell)
     return out
 
-DEFAULT_EXCEL = "S44/Zawodnicy S44gpt.csv"
+DEFAULT_EXCEL = "S51/Zawodnicy S51gpt.csv"
 DEFAULT_OUTDIR = "."
 FLAGS_DIR = "./flags"
 
@@ -153,7 +153,7 @@ RNG = np.random.default_rng()
 
 def load_roster(path: Path) -> pd.DataFrame:
     """
-    Wczytuje bazę zawodników w 'nowym' formacie z pliku Zawodnicy S44gpt.xlsx,
+    Wczytuje bazę zawodników w 'nowym' formacie z pliku Zawodnicy S51gpt.xlsx,
     ale zachowuje kompatybilność wsteczną (stary układ kolumn też zadziała).
     Zwraca pełny DataFrame z kolumnami, jeśli są dostępne:
     ['Zawodnik','Kraj','Płeć','JUN/SEN','Wiek','UM','Forma','PrawoStartu','Kontuzja'].
@@ -255,12 +255,31 @@ def load_roster(path: Path) -> pd.DataFrame:
 
     return df
 
-def _ability_rank_offset(um: pd.Series, forma: pd.Series) -> np.ndarray:
+def _ability_norm_soft(ability: np.ndarray, base: float = 100.0, above_exp: float = 0.7) -> np.ndarray:
+    """
+    Normalizacja ability z miękkim rozszerzeniem powyżej base (domyślnie 100).
+    - ability <= base  → norm = ability / base          (liniowo, 0..1)
+    - ability >  base  → norm = (ability / base)^above_exp  (rośnie wolniej, >1)
+    Przykłady (above_exp=0.7):
+      ability=100 → norm=1.00  (offset +14m)
+      ability=115 → norm=1.10  (offset +21.6m)
+      ability=130 → norm=1.19  (offset +27.1m)
+      ability=200 → norm=1.52  (offset +49.7m)
+    """
+    a = np.asarray(ability, dtype=float)
+    norm = np.where(
+        a <= base,
+        np.clip(a / base, 0.0, 1.0),
+        np.power(a / base, float(above_exp))
+    )
+    return norm
+
+def _ability_rank_offset(um: pd.Series, forma: pd.Series, ability_scale: float = 100.0) -> np.ndarray:
     um = pd.to_numeric(um, errors='coerce').fillna(50)
     forma = pd.to_numeric(forma, errors='coerce').fillna(50)
     ability = 0.65 * um + 0.35 * forma
-    norm = np.clip(ability / 100.0, 0.0, 1.0)
-    offset = -55.0 + 69.0 * norm  # [-55, +14] m
+    norm = _ability_norm_soft(ability, base=float(ability_scale))
+    offset = -55.0 + 69.0 * norm
     return offset
 
 def _soft_limit_params(HS: float, randomness: float):
@@ -318,15 +337,16 @@ roster: pd.DataFrame,
     wind_flight_gain: float = 2.2,
     judges_rho: float = 0.55,
     sort_output: bool = True,
+    ability_scale: float = 100.0,
 ) -> pd.DataFrame:
     rng_loc = rng or RNG
 
-    base_offset = _ability_rank_offset(roster["UM"], roster["Forma"])
+    base_offset = _ability_rank_offset(roster["UM"], roster["Forma"], ability_scale=ability_scale)
     base_perf = K + base_offset
 
     n = len(roster)
     ability_val = 0.65 * pd.to_numeric(roster['UM'], errors='coerce').fillna(50).to_numpy() +                   0.35 * pd.to_numeric(roster['Forma'], errors='coerce').fillna(50).to_numpy()
-    ability_norm = np.clip(ability_val / 100.0, 0.0, 1.0)
+    ability_norm = _ability_norm_soft(ability_val, base=float(ability_scale))
 
     hill_gap = max(0.0, float(HS) - float(K)) if HS is not None else 0.0
     base_perf = base_perf + (ability_norm**2) * (0.60 * hill_gap)
@@ -401,8 +421,8 @@ roster: pd.DataFrame,
     if HS is not None:
         margin, lin, quad = _soft_limit_params(HS, randomness)
         margin_eff = margin * (0.8 + 0.6 * ability_norm)
-        lin_eff = lin * (1.0 - 0.6 * ability_norm)
-        quad_eff = quad * (1.0 - 0.6 * ability_norm)
+        lin_eff = np.maximum(0.0, lin * (1.0 - 0.6 * ability_norm))
+        quad_eff = np.maximum(0.0, quad * (1.0 - 0.6 * ability_norm))
         over = np.maximum(0.0, distance - (HS + margin_eff))
         distance = distance - (lin_eff * over + quad_eff * over**2)
 
@@ -545,6 +565,7 @@ def simulate_competition(
     wind_takeoff_gain: float = 0.5,
     wind_flight_gain: float = 2.2,
     judges_rho: float = 0.55,
+    ability_scale: float = 100.0,
 ):
     if meter_value is None:
         meter_value = compute_meter_value(K)
@@ -555,7 +576,8 @@ def simulate_competition(
         gate_base, gate_points_per_step, p_gate_change, max_gate_delta, rng,
         randomness=randomness, elite_regress=elite_regress,
         wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
-        wind_flight_gain=wind_flight_gain, judges_rho=judges_rho
+        wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+        ability_scale=ability_scale
     )
     kwal_df.insert(0, "Runda", "Kwalifikacje")
 
@@ -626,7 +648,8 @@ def simulate_competition(
             gate_base, gate_points_per_step, p_gate_change, max_gate_delta, rng,
             randomness=randomness, elite_regress=elite_regress,
             wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
-            wind_flight_gain=wind_flight_gain, judges_rho=judges_rho
+            wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+            ability_scale=ability_scale
         )
         rnd_df.insert(0, "Runda", idx)
         all_rounds.append(rnd_df)
@@ -724,6 +747,7 @@ def simulate_ko_competition(
     wind_takeoff_gain: float = 0.5,
     wind_flight_gain: float = 2.2,
     judges_rho: float = 0.55,
+    ability_scale: float = 100.0,
 ):
     if meter_value is None:
         meter_value = compute_meter_value(K)
@@ -736,7 +760,8 @@ def simulate_ko_competition(
         p_gate_change=p_gate_change, max_gate_delta=max_gate_delta,
         rng=rng, randomness=randomness, elite_regress=elite_regress,
         wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
-        wind_flight_gain=wind_flight_gain, judges_rho=judges_rho
+        wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+        ability_scale=ability_scale
     )
     kwal_df.insert(0, "Runda", "Kwalifikacje")
 
@@ -794,7 +819,8 @@ def simulate_ko_competition(
         p_gate_change=p_gate_change, max_gate_delta=max_gate_delta,
         rng=rng, randomness=randomness, elite_regress=elite_regress,
         wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
-        wind_flight_gain=wind_flight_gain, judges_rho=judges_rho
+        wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+        ability_scale=ability_scale
     , sort_output=False)
     r1.insert(0, "Runda", 1)
 
@@ -829,7 +855,8 @@ def simulate_ko_competition(
         p_gate_change=p_gate_change, max_gate_delta=max_gate_delta,
         rng=rng, randomness=randomness, elite_regress=elite_regress,
         wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
-        wind_flight_gain=wind_flight_gain, judges_rho=judges_rho
+        wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+        ability_scale=ability_scale
     )
     r2.insert(0, "Runda", 2)
 
@@ -947,6 +974,7 @@ def simulate_ko_single_elim(
     wind_takeoff_gain: float = 0.5,
     wind_flight_gain: float = 2.2,
     judges_rho: float = 0.55,
+    ability_scale: float = 100.0,
 ):
     """
     Tryb: czysta drabinka single-elimination bez Lucky Losers.
@@ -964,7 +992,8 @@ def simulate_ko_single_elim(
         p_gate_change=p_gate_change, max_gate_delta=max_gate_delta,
         rng=rng, randomness=randomness, elite_regress=elite_regress,
         wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
-        wind_flight_gain=wind_flight_gain, judges_rho=judges_rho
+        wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+        ability_scale=ability_scale
     )
     kwal_df.insert(0, "Runda", "Kwalifikacje")
     kval_rank = kwal_df[["Zawodnik","Kraj","Punkty rundy","Odległość"]].rename(columns={"Punkty rundy":"Punkty","Odległość":"Odl.Q"})
@@ -1007,6 +1036,7 @@ def simulate_ko_single_elim(
             rng=rng, randomness=randomness, elite_regress=elite_regress,
             wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
             wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+            ability_scale=ability_scale,
             sort_output=False
         )
         r_df.insert(0, "Runda", round_no)
@@ -1364,6 +1394,8 @@ def main():
     p.add_argument("--ko-bracket", type=int, default=None, help="Single-elimination KO bez Lucky Losers; rozmiar drabinki (np. 64)")
     p.add_argument("--ko", action="store_true", help="Użyj systemu KO (Turniej 4 Skoczni) zamiast klasycznych cięć")
 
+    p.add_argument("--ability-scale", type=float, default=100.0, help="Mianownik przy normalizacji UM/Formy (domyślnie 100). Zawodnicy z wartościami powyżej tego progu osiągną norm=1.0. Np. --ability-scale 120 pozwala na pełen efekt przy UM/Forma=120.")
+
     args = p.parse_args()
 
     excel_path = Path(args.excel)
@@ -1372,6 +1404,7 @@ def main():
 
     randomness = float(args.randomness)  # może być > 1.0
     elite_regress = float(max(0.0, args.elite_regress))
+    ability_scale = float(max(1.0, args.ability_scale))
     wind_phi = float(np.clip(args.wind_phi, 0.0, 0.95))
     judges_rho = float(np.clip(args.judges_rho, 0.0, 0.95))
     p_gate_change = float(np.clip(args.p_gate_change, 0.0, 1.0))
@@ -1385,7 +1418,7 @@ def main():
     rng = np.random.default_rng()
 
     if args.ko_bracket:
-        print(f"→ Tryb KO single-elim (bracket={args.ko_bracket}). randomness={randomness}, elite_regress={elite_regress}")
+        print(f"→ Tryb KO single-elim (bracket={args.ko_bracket}). randomness={randomness}, elite_regress={elite_regress}, ability_scale={ability_scale}")
         kwal_df, kval_rank, contest_rows, klasyf, extra_sheets = simulate_ko_single_elim(
             roster=roster, K=args.k, HS=args.hs, meter_value=meter_value,
             bracket_size=int(args.ko_bracket),
@@ -1394,11 +1427,12 @@ def main():
             p_gate_change=p_gate_change, max_gate_delta=max_gate_delta,
             rng=rng, randomness=randomness, elite_regress=elite_regress,
             wind_phi=wind_phi, wind_takeoff_gain=args.wind_takeoff_gain,
-            wind_flight_gain=args.wind_flight_gain, judges_rho=judges_rho
+            wind_flight_gain=args.wind_flight_gain, judges_rho=judges_rho,
+            ability_scale=ability_scale
         )
         extra = extra_sheets
     elif args.ko:
-        print(f"→ Tryb KO (T4S). randomness={randomness}, elite_regress={elite_regress}")
+        print(f"→ Tryb KO (T4S). randomness={randomness}, elite_regress={elite_regress}, ability_scale={ability_scale}")
         kwal_df, kval_rank, contest_rows, klasyf, extra_sheets = simulate_ko_competition(
             roster=roster, K=args.k, HS=args.hs, meter_value=meter_value,
             qual_spots=int(args.qual_spots),
@@ -1407,12 +1441,13 @@ def main():
             p_gate_change=p_gate_change, max_gate_delta=max_gate_delta,
             rng=rng, randomness=randomness, elite_regress=elite_regress,
             wind_phi=wind_phi, wind_takeoff_gain=args.wind_takeoff_gain,
-            wind_flight_gain=args.wind_flight_gain, judges_rho=judges_rho
+            wind_flight_gain=args.wind_flight_gain, judges_rho=judges_rho,
+            ability_scale=ability_scale
         )
         extra = extra_sheets
     else:
         round_cuts = [int(x) for x in str(args.round_cuts).split(",") if str(x).strip()]
-        print(f"→ Tryb klasyczny. random={randomness}, elite_regress={elite_regress}, rundy={round_cuts}")
+        print(f"→ Tryb klasyczny. random={randomness}, elite_regress={elite_regress}, ability_scale={ability_scale}, rundy={round_cuts}")
         kwal_df, kval_rank, contest_rows, klasyf = simulate_competition(
             roster=roster, round_cuts=round_cuts, K=args.k, HS=args.hs, meter_value=meter_value,
             wind_ms_mean=args.wind_mean, wind_ms_sd=args.wind_sd,
@@ -1421,7 +1456,8 @@ def main():
             rng=rng, randomness=randomness, elite_regress=elite_regress,
             wind_phi=wind_phi, wind_takeoff_gain=args.wind_takeoff_gain,
             wind_flight_gain=args.wind_flight_gain, judges_rho=judges_rho,
-            qual_spots=int(args.qual_spots)
+            qual_spots=int(args.qual_spots),
+            ability_scale=ability_scale
         )
         extra = None
 

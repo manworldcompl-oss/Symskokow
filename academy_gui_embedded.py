@@ -568,7 +568,7 @@ class AcademyFrame(ttk.Frame):
         bar.pack(fill=tk.X, padx=8, pady=(8, 4))
 
         ttk.Label(bar, text="MEN:").pack(side=tk.LEFT)
-        ttk.Entry(bar, textvariable=self.men_var, width=42).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Entry(bar, textvariable=self.men_var, width=28).pack(side=tk.LEFT, padx=(4, 2))
         ttk.Button(bar, text="…", width=3, command=self._pick_men).pack(side=tk.LEFT)
         ttk.Button(bar, text="Wczytaj MEN", command=lambda: self._reload_tab("MEN")).pack(side=tk.LEFT, padx=(6, 4))
         ttk.Button(
@@ -578,7 +578,7 @@ class AcademyFrame(ttk.Frame):
         ).pack(side=tk.LEFT, padx=(4, 16))
 
         ttk.Label(bar, text="WOMEN:").pack(side=tk.LEFT)
-        ttk.Entry(bar, textvariable=self.women_var, width=42).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Entry(bar, textvariable=self.women_var, width=28).pack(side=tk.LEFT, padx=(4, 2))
         ttk.Button(bar, text="…", width=3, command=self._pick_women).pack(side=tk.LEFT)
         ttk.Button(bar, text="Wczytaj WOMEN", command=lambda: self._reload_tab("WOMEN")).pack(side=tk.LEFT, padx=(6, 4))
         ttk.Button(
@@ -586,6 +586,21 @@ class AcademyFrame(ttk.Frame):
             text="Rozwój WOMEN (nowy sezon)",
             command=lambda: self._advance_season("WOMEN"),
         ).pack(side=tk.LEFT, padx=(4, 0))
+
+        # Drugi wiersz - przeniesienie plików Akademii (M+W) do nowego sezonu (czysta kopia)
+        bar2 = ttk.Frame(self)
+        bar2.pack(fill=tk.X, padx=8, pady=(0, 4))
+
+        ttk.Button(
+            bar2,
+            text="Nowy sezon →",
+            command=self._kopiuj_na_nowy_sezon,
+        ).pack(side=tk.LEFT)
+        ttk.Label(
+            bar2,
+            text="(kopiuje Akademia M i Akademia W do folderu kolejnego sezonu i zmienia nazwy plików)",
+            foreground="#666",
+        ).pack(side=tk.LEFT, padx=(8, 0))
 
         # menu kontekstowe (prawy klik) – będzie używane przez konkretne tv z MEN/WOMEN
         self._ctx_tv = None
@@ -652,6 +667,68 @@ class AcademyFrame(ttk.Frame):
             return
         self.women_var.set(p)
         self._reload_tab("WOMEN")
+
+    def _kopiuj_na_nowy_sezon(self):
+        """
+        Przenosi pliki Akademia M S<X>.csv i Akademia W S<X>.csv z folderu ./S<X>/
+        do ./S<X+1>/ i zmienia im nazwy na Akademia M/W S<X+1>.csv.
+        Bez żadnych modyfikacji zawartości - czysta kopia + zmiana nazwy
+        (analogicznie do przycisku 'Nowy sezon' w zakładce Infrastruktura).
+        """
+        import re as _re2
+        import shutil as _shutil
+        from pathlib import Path as _Path
+
+        sukcesy: List[str] = []
+        bledy: List[str] = []
+
+        for label, var in (("Akademia M", self.men_var), ("Akademia W", self.women_var)):
+            cur_path = _Path(var.get().strip())
+            if not cur_path.is_file():
+                bledy.append(f"{label}: nie znaleziono pliku\n{cur_path}")
+                continue
+
+            # Wykryj numer sezonu z nazwy pliku / folderu, np. ".../S51/Akademia M S51.csv" -> S51
+            match = _re2.search(r"S(\d+)", str(cur_path))
+            if not match:
+                bledy.append(f"{label}: nie udało się wykryć numeru sezonu ze ścieżki")
+                continue
+
+            cur_num = int(match.group(1))
+            next_num = cur_num + 1
+            cur_tag = f"S{cur_num}"
+            next_tag = f"S{next_num}"
+
+            # Folder docelowy (jak w zakładce Infrastruktura)
+            next_dir = cur_path.parent.parent / next_tag
+            next_dir.mkdir(parents=True, exist_ok=True)
+            dst_path = next_dir / f"{label} {next_tag}.csv"
+
+            try:
+                _shutil.copyfile(cur_path, dst_path)
+            except Exception as e:
+                bledy.append(f"{label}: błąd zapisu\n{e}")
+                continue
+
+            var.set(str(dst_path))
+            sukcesy.append(f"{label}: {cur_tag} → {next_tag}\n  {dst_path}")
+
+        if sukcesy:
+            self._reload_tab("MEN")
+            self._reload_tab("WOMEN")
+
+        parts = []
+        if sukcesy:
+            parts.append("Skopiowano bez zmian:\n" + "\n".join(sukcesy))
+        if bledy:
+            parts.append("Błędy:\n" + "\n".join(bledy))
+
+        if bledy and not sukcesy:
+            messagebox.showerror("Nowy sezon", "\n\n".join(parts), parent=self)
+        elif bledy:
+            messagebox.showwarning("Nowy sezon – częściowo", "\n\n".join(parts), parent=self)
+        else:
+            messagebox.showinfo("Nowy sezon – gotowe", "\n\n".join(parts), parent=self)
 
     # ---- reload + fill ----
     def _reload_tab(self, tag: str, initial: bool = False):
@@ -951,7 +1028,12 @@ class AcademyFrame(ttk.Frame):
         self._fill_tree(st)
 
         # odwróć kierunek na kolejny klik
-        st.tv.heading(col, command=lambda st=st, col=col: self._sort_by(st, col, not descending))
+        # "Kraj" jest w kolumnie drzewa (#0), nie w tv["columns"] – trzeba użyć "#0"
+        heading_col = "#0" if col == "Kraj" else col
+        try:
+            st.tv.heading(heading_col, command=lambda st=st, col=col: self._sort_by(st, col, not descending))
+        except Exception:
+            pass
 
     def _on_right_click(self, event, tag: str, tv: ttk.Treeview):
         row = tv.identify_row(event.y)

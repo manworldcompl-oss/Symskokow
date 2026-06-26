@@ -1,4 +1,4 @@
-#24.01
+﻿#24.01
 - CC, MSC, NTC jest chyba już całkiem zrobione, tylko zamiast NTC jest SWISS
 - MSC chyba działa dobrze, jedynie co to można sprawdzić żeby w fazie pucharowej było wpisane 1/0 zamiast punktów, ale wydaje mi się, że tak też jest spoko
 
@@ -141,3 +141,11 @@ IND GUI:
 OSIĄGNIĘCIA:
 - Nie podpinać pod główny program, bo QtFast
 - Można dodać filtrowanie po sezonach
+
+#18.06
+- [ZROBIONE] Klasyfikacje rozciągnięte w dół
+- [ZROBIONE] Zakładka z historią miejsc turniejów podpięta do programu
+- [ZROBIONE] Zasady wyboru gospodarzy / COCH po kontynentach
+- [ZROBIONE] Teamówki w statystykach osiągnięć
+- [ZROBIONE] Filtrowanie po sezonach w osiągnięciach
+- [ZROBIONE] Sortowanie po kraju/reprezentacji w finansach

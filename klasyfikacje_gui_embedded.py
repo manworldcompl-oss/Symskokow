@@ -23,21 +23,25 @@ import pandas as pd
 __all__ = ["build_gui", "KlasyfikacjeFrame"]
 
 FLAGS_DIR_DEFAULT = "./flags"
-CSV_DIR_DEFAULT   = "./S44/Klasyfikacje S44"
-EXCEL_DEFAULT     = "Klasyfikacje2 S44 — kopia.xlsx"
+CSV_DIR_DEFAULT   = "./S51/Klasyfikacje S51"
+EXCEL_DEFAULT     = "Klasyfikacje2 S51 — kopia.xlsx"
 TOUR_SCHEMAS = {
     "TCS":       ["LP.","JUMPER","NAT","K1","K2","K3","K4","Overall"],
     "FT":        ["LP.","JUMPER","NAT","K1","K2","K3","K4","Overall"],
     "NT":        ["LP.","JUMPER","NAT","K1","K2","K3","K4","Overall"],
     "RAWAIR-W":  ["LP.","JUMPER","NAT","K1","K2","K3","K4","Overall"],
     "BB":        ["LP.","JUMPER","NAT","K1","K2","K3","K4","Overall"],
+    "FNT":       ["LP.","JUMPER","NAT","K1","K2","K3","K4","Overall"],
     "WILLINGEN5":["LP.","JUMPER","NAT","Q1","K1","K2","Overall"],
     "PLANICA7":  ["LP.","JUMPER","NAT","Q1","K1","K2","Overall"],
     "RAWAIR-M":  ["LP.","JUMPER","NAT","Q1","K1","Q2","K2","Overall"],
+    # Ski Flying – plik __players.csv: LP.;JUMPER;NAT;PTS;K1;K2;K3
+    "SKI_FLYING_M": ["LP.","JUMPER","NAT","PTS","K1","K2","K3"],
+    "SKI_FLYING_W": ["LP.","JUMPER","NAT","PTS","K1","K2","K3"],
 }
 
-MEN_TOURS  = ["TCS","FT","NT","WILLINGEN5","PLANICA7","RAWAIR-M"]
-WOMEN_TOURS = ["RAWAIR-W","BB"]
+MEN_TOURS  = ["TCS","FT","NT","WILLINGEN5","PLANICA7","RAWAIR-M","SKI_FLYING_M"]
+WOMEN_TOURS = ["RAWAIR-W","BB","FNT","SKI_FLYING_W"]
 
 
 class KlasyfikacjeFrame(ttk.Frame):
@@ -639,8 +643,12 @@ class KlasyfikacjeFrame(ttk.Frame):
         candidates = []
         if season:
             candidates.append(os.path.join(root, f"{season}_{tour_code}.csv"))
+            # Ski Flying używa formatu __players.csv zamiast standardowego pliku turnieju
+            candidates.append(os.path.join(root, f"{season}_{tour_code}__players.csv"))
         candidates.append(os.path.join(root, f"{tour_code}.csv"))
+        candidates.append(os.path.join(root, f"{tour_code}__players.csv"))
         candidates.extend(sorted(glob.glob(os.path.join(root, f"*_{tour_code}.csv"))))
+        candidates.extend(sorted(glob.glob(os.path.join(root, f"*_{tour_code}__players.csv"))))
 
         path = next((p for p in candidates if os.path.isfile(p)), None)
         if path is None:
@@ -661,6 +669,17 @@ class KlasyfikacjeFrame(ttk.Frame):
                 mapping[c] = "NAT"
         if mapping:
             df = df.rename(columns=mapping)
+
+        # Plik __players.csv (Ski Flying): kolumny to LP.;JUMPER;NAT;PTS;1;2;3
+        # Przemianuj kolumny numeryczne (1,2,3,...) na K1,K2,K3,...
+        renamed_k = {}
+        k_idx = 1
+        for c in list(df.columns):
+            if c not in ("LP.", "JUMPER", "NAT", "PTS", "Overall") and str(c).strip().lstrip("-").isdigit():
+                renamed_k[c] = f"K{k_idx}"
+                k_idx += 1
+        if renamed_k:
+            df = df.rename(columns=renamed_k)
 
         # dopisz brakujące kolumny ze schematu
         for c in schema:

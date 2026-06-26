@@ -296,6 +296,18 @@ def init_nowe_tabele(
 
 # ── Aktualizacja rekordow (skocznia / swiat / kraj) ───────────────────────────
 
+def _parse_hs_from_hill_name(skocznia_nazwa: str):
+    """
+    Wyciaga wartosc HS z nazwy skoczni w formacie:
+      'Miasto (K120-HS142) 2026-03-12 ...'  -> 142
+      'Strbske Pleso (K175-HS200) ...'       -> 200
+    Zwraca int lub None jesli nie znaleziono.
+    """
+    import re
+    m = re.search(r'HS(\d+)', skocznia_nazwa, re.IGNORECASE)
+    return int(m.group(1)) if m else None
+
+
 def _aktualizuj_rekordy(cur, zawodnik, kraj_zawodnika, plec, best_dist, skocznia_nazwa, sezon):
     """
     Sprawdza i aktualizuje (jesli pobito):
@@ -316,21 +328,53 @@ def _aktualizuj_rekordy(cur, zawodnik, kraj_zawodnika, plec, best_dist, skocznia
     nowy_s, nowy_sw, nowy_k = False, False, False
 
     # ── a) Rekord skoczni ─────────────────────────────────────────────────────
-    # Szukaj: 1) po nazwie skoczni dokladnie, 2) po miescie, 3) czesciowo
+    # Wyciagamy HS z nazwy pliku (np. "Strbske Pleso (K175-HS200) ...") zeby
+    # jednoznacznie odroznic skocznie w tym samym miescie (np. MS 1970 A/B/C).
+    hs_z_nazwy = _parse_hs_from_hill_name(skocznia_nazwa)
+
+    row_s = None
+
+    # Krok 1: dokladna nazwa skoczni (bez HS – rzadko uzytek, ale zostawiamy)
     cur.execute("SELECT id FROM skocznie WHERE LOWER(skocznia) = LOWER(?)", (skocznia_nazwa,))
     row_s = cur.fetchone()
+
+    # Krok 2: miasto + HS (glowna sciezka gdy skocznia_nazwa = "Miasto (KX-HSY) ...")
+    if row_s is None and hs_z_nazwy is not None:
+        cur.execute(
+            "SELECT id FROM skocznie WHERE"
+            "  (LOWER(?) LIKE '%' || LOWER(miasto) || '%'"
+            "   OR LOWER(miasto) LIKE '%' || LOWER(?) || '%')"
+            "  AND hs = ?",
+            (skocznia_nazwa, skocznia_nazwa, hs_z_nazwy)
+        )
+        row_s = cur.fetchone()
+
+    # Krok 3: samo miasto (bez HS) – tylko gdy HS nie byl dostepny
     if row_s is None:
         cur.execute("SELECT id FROM skocznie WHERE LOWER(miasto) = LOWER(?)", (skocznia_nazwa,))
         row_s = cur.fetchone()
+
+    # Krok 4: czesciowe dopasowanie po nazwie skoczni lub miescie + HS jesli dostepny
     if row_s is None:
-        cur.execute(
-            "SELECT id FROM skocznie WHERE"
-            "  LOWER(?) LIKE '%' || LOWER(skocznia) || '%'"
-            "  OR LOWER(skocznia) LIKE '%' || LOWER(?) || '%'"
-            "  OR LOWER(?) LIKE '%' || LOWER(miasto) || '%'"
-            "  OR LOWER(miasto) LIKE '%' || LOWER(?) || '%'",
-            (skocznia_nazwa, skocznia_nazwa, skocznia_nazwa, skocznia_nazwa)
-        )
+        if hs_z_nazwy is not None:
+            cur.execute(
+                "SELECT id FROM skocznie WHERE"
+                "  (LOWER(?) LIKE '%' || LOWER(skocznia) || '%'"
+                "   OR LOWER(skocznia) LIKE '%' || LOWER(?) || '%'"
+                "   OR LOWER(?) LIKE '%' || LOWER(miasto) || '%'"
+                "   OR LOWER(miasto) LIKE '%' || LOWER(?) || '%')"
+                "  AND hs = ?",
+                (skocznia_nazwa, skocznia_nazwa, skocznia_nazwa, skocznia_nazwa, hs_z_nazwy)
+            )
+        else:
+            cur.execute(
+                "SELECT id FROM skocznie WHERE"
+                "  LOWER(?) LIKE '%' || LOWER(skocznia) || '%'"
+                "  OR LOWER(skocznia) LIKE '%' || LOWER(?) || '%'"
+                "  OR LOWER(?) LIKE '%' || LOWER(miasto) || '%'"
+                "  OR LOWER(miasto) LIKE '%' || LOWER(?) || '%'",
+                (skocznia_nazwa, skocznia_nazwa, skocznia_nazwa, skocznia_nazwa)
+            )
         row_s = cur.fetchone()
 
     if row_s is not None:

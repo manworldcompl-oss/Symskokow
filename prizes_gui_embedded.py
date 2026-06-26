@@ -133,6 +133,16 @@ PRIZES_GENERAL_JC = {
 PRIZES_NATIONS_RANK_JC = PRIZES_GENERAL_JC.copy()
 PRIZES_WINS_JC = {"P1": 15000, "P2": 10000, "P3": 5000}
 
+# --- TCS i inne pod-turnieje WC (NT, FT, P7, W5, RA, BB, FNT) ---
+PRIZES_SUBTOUR = {
+    1: 150000, 2: 100000, 3: 75000, 4: 60000, 5: 50000,
+    6: 40000, 7: 40000, 8: 40000, 9: 40000, 10: 40000,
+    11: 30000, 12: 30000, 13: 30000, 14: 30000, 15: 30000,
+    16: 30000, 17: 30000, 18: 30000, 19: 30000, 20: 30000,
+    21: 20000, 22: 20000, 23: 20000, 24: 20000, 25: 20000,
+    26: 20000, 27: 20000, 28: 20000, 29: 20000, 30: 20000
+}
+
 
 
 # Funkcja pomocnicza wybierająca zestaw nagród dla cyklu
@@ -143,7 +153,7 @@ def get_tour_prize_config(tour_code):
     elif tour_code == "FC":
         return PRIZES_GENERAL_FC, 0, PRIZES_NATIONS_RANK_FC, 2500, PRIZES_WINS_FC
     elif tour_code == "GP":
-        return PRIZES_GENERAL_GP, 5000, PRIZES_NATIONS_RANK_GP, 5000, PRIZES_WINS_FC
+        return PRIZES_GENERAL_GP, 5000, PRIZES_NATIONS_RANK_GP, 5000, PRIZES_WINS_GP
     elif tour_code == "SCOC":
         return PRIZES_GENERAL_SCOC, 0, PRIZES_NATIONS_RANK_SCOC, 2500, PRIZES_WINS_SCOC
     elif tour_code in ["JC", "MC", "PC", "QC", "TC", "AC", "BC", "DC"]:
@@ -304,13 +314,6 @@ def format_currency(val):
 class MultiTableTab(ttk.Frame):
     def __init__(self, parent):
         super().__init__(parent)
-        # --- pasek z przyciskiem Odśwież ---
-        self._toolbar = ttk.Frame(self)
-        self._toolbar.pack(side="top", fill="x", padx=6, pady=(4, 0))
-        self._refresh_btn = ttk.Button(self._toolbar, text="🔄 Odśwież", command=self._do_refresh)
-        self._refresh_btn.pack(side="left")
-        self._status_lbl = ttk.Label(self._toolbar, text="")
-        self._status_lbl.pack(side="left", padx=8)
         # --- reszta układu ---
         self.canvas = tk.Canvas(self)
         self.vsb = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
@@ -329,20 +332,10 @@ class MultiTableTab(ttk.Frame):
 
     def _do_refresh(self):
         """Wywołuje odpowiednią metodę ładowania danych w podklasie."""
-        self._refresh_btn.config(state="disabled")
-        self._status_lbl.config(text="Odświeżanie...")
-        self.update_idletasks()
-        try:
-            for meth in ("load_data", "load_summary_data", "load_team_data", "load_grand_summary"):
-                if hasattr(self, meth) and callable(getattr(self, meth)):
-                    getattr(self, meth)()
-                    break
-            self._status_lbl.config(text="✓ Odświeżono")
-        except Exception as e:
-            self._status_lbl.config(text=f"Błąd: {e}")
-        finally:
-            self._refresh_btn.config(state="normal")
-        self.after(3000, lambda: self._status_lbl.config(text=""))
+        for meth in ("load_data", "load_summary_data", "load_team_data", "load_grand_summary"):
+            if hasattr(self, meth) and callable(getattr(self, meth)):
+                getattr(self, meth)()
+                break
 
     def add_table(self, title, df, columns):
         if df is None or df.empty:
@@ -400,7 +393,7 @@ class TournamentTab(MultiTableTab):
         col_p = ["Lp.", "Jumper", "NAT"]
         # Dodatkowe kolumny turniejowe
         if self.tour_code == "WC":
-            extra = ["TCS", "NT", "FT", "P7", "W5", "RA"] if self.gender == "M" else ["RA", "BB"]
+            extra = ["TCS", "NT", "FT", "P7", "W5", "RA"] if self.gender == "M" else ["RA", "BB", "FNT"]
             col_p += extra
         col_p += ["P1", "P2", "P3", "Suma"]
 
@@ -409,7 +402,7 @@ class TournamentTab(MultiTableTab):
             # Szukamy miejsc w dodatkowych plikach (TCS, NT itd.)
             sub_maps = {}
             if self.tour_code == "WC":
-                tour_list = ["TCS", "NT", "FT", "P7", "W5", "RA"] if self.gender == "M" else ["RA", "BB"]
+                tour_list = ["TCS", "NT", "FT", "P7", "W5", "RA"] if self.gender == "M" else ["RA", "BB", "FNT"]
                 # Mapowanie kodu kolumny -> rzeczywista nazwa pliku CSV
                 file_map = {
                     "RA": "S51_RAWAIR-W.csv" if self.gender == "W" else "S51_RAWAIR-M.csv",
@@ -434,6 +427,13 @@ class TournamentTab(MultiTableTab):
                 # Liczenie sumy
                 val = get_prize_val(lp, p_gen, d_gen)
                 val += (p1 * p_wins.get("P1", 0)) + (p2 * p_wins.get("P2", 0)) + (p3 * p_wins.get("P3", 0))
+
+                # Nagrody za miejsca w pod-turniejach (TCS, NT, FT, P7, W5, RA, BB, FNT)
+                # Każdy pod-turniej liczony i sumowany osobno
+                for st, m in sub_maps.items():
+                    sub_lp = m.get(name)
+                    if sub_lp is not None:
+                        val += get_prize_val(sub_lp, PRIZES_SUBTOUR, 0)
                 
                 r_data = {"Lp.": lp, "Jumper": name, "NAT": nat, "P1": p1, "P2": p2, "P3": p3, "Suma": format_currency(val)}
                 for k, m in sub_maps.items(): r_data[k] = m.get(name, "-")
@@ -943,7 +943,22 @@ class GrandSummaryTab(MultiTableTab):
             messagebox.showerror("Błąd eksportu", f"Nie udało się zapisać pliku w folderze ./S51: {e}")
 
 def build_gui(parent):
-    nb_main = ttk.Notebook(parent)
+    # Kontener - to on jest "zakładką Nagrody" w głównym Notebooku,
+    # żeby pasek z przyciskiem nie wyciekał poza tę zakładkę.
+    container = ttk.Frame(parent)
+    container.pack(fill="both", expand=True)
+
+    # --- Wspólny pasek z jednym przyciskiem odświeżania dla wszystkich zakładek ---
+    toolbar = ttk.Frame(container)
+    toolbar.pack(side="top", fill="x", padx=6, pady=(4, 0))
+    refresh_btn = ttk.Button(toolbar, text="🔄 Odśwież wszystkie zakładki")
+    refresh_btn.pack(side="left")
+    status_lbl = ttk.Label(toolbar, text="")
+    status_lbl.pack(side="left", padx=8)
+
+    all_tabs: list = []
+
+    nb_main = ttk.Notebook(container)
     nb_main.pack(fill="both", expand=True)
     for g_text, g_code in [("MEN", "M"), ("WOMEN", "W")]:
         tab_g = ttk.Frame(nb_main)
@@ -952,16 +967,25 @@ def build_gui(parent):
         nb_sub.pack(fill="both", expand=True)
         # Turnieje
         for t in ["GP", "SCOC", "WC", "COC", "FC", "JC", "MC", "PC", "QC", "TC", "AC", "BC", "DC"]:
-            nb_sub.add(TournamentTab(nb_sub, t, g_code), text=t)
+            tab = TournamentTab(nb_sub, t, g_code)
+            nb_sub.add(tab, text=t)
+            all_tabs.append(tab)
         # Mistrzostwa
         for c in ["OG", "WCH", "SFWC", "NKIC", "IST", "YOG", "UNI", "JWC", "COCH"]:
             if c == "COCH":
                 tab_coch = ttk.Frame(nb_sub); nb_sub.add(tab_coch, text="COCH")
                 nb_c = ttk.Notebook(tab_coch); nb_c.pack(fill="both", expand=True)
                 for reg in ["EUROPE", "ASIA", "NORTHAMERICA", "SOUTHAMERICA", "OCEANIA", "AFRICA"]:
-                    nb_c.add(ChampionshipTab(nb_c, "COCH", g_code, reg), text=reg)
-            else: nb_sub.add(ChampionshipTab(nb_sub, c, g_code), text=c)
-        nb_sub.add(SummaryTab(nb_sub, g_code), text="SUMA")
+                    tab = ChampionshipTab(nb_c, "COCH", g_code, reg)
+                    nb_c.add(tab, text=reg)
+                    all_tabs.append(tab)
+            else:
+                tab = ChampionshipTab(nb_sub, c, g_code)
+                nb_sub.add(tab, text=c)
+                all_tabs.append(tab)
+        tab = SummaryTab(nb_sub, g_code)
+        nb_sub.add(tab, text="SUMA")
+        all_tabs.append(tab)
     # Sekcja TEAM w głównym Notebooku (nb_main)
     tab_team_root = ttk.Frame(nb_main)
     nb_main.add(tab_team_root, text="TEAM")
@@ -970,15 +994,40 @@ def build_gui(parent):
 
     # Podzakładki turniejowe
     for t in ["CC", "MSC", "SWISS"]:
-        nb_team_sub.add(TeamTab(nb_team_sub, t), text=t)
-    
+        tab = TeamTab(nb_team_sub, t)
+        nb_team_sub.add(tab, text=t)
+        all_tabs.append(tab)
+
     # NOWA podzakładka SUMA na końcu sekcji TEAM
-    nb_team_sub.add(TeamSummaryTab(nb_team_sub), text="SUMA")
+    tab = TeamSummaryTab(nb_team_sub)
+    nb_team_sub.add(tab, text="SUMA")
+    all_tabs.append(tab)
 
     # NOWA GŁÓWNA ZAKŁADKA ALL
-    nb_main.add(GrandSummaryTab(nb_main), text="ALL")
+    tab = GrandSummaryTab(nb_main)
+    nb_main.add(tab, text="ALL")
+    all_tabs.append(tab)
 
-    return nb_main
+    def _refresh_all():
+        refresh_btn.config(state="disabled")
+        errors = []
+        for i, t in enumerate(all_tabs, start=1):
+            status_lbl.config(text=f"Odświeżanie... ({i}/{len(all_tabs)})")
+            status_lbl.update_idletasks()
+            try:
+                t._do_refresh()
+            except Exception as e:
+                errors.append(str(e))
+        if errors:
+            status_lbl.config(text=f"✓ Odświeżono ({len(all_tabs)}) – błędy: {len(errors)}")
+        else:
+            status_lbl.config(text=f"✓ Odświeżono wszystkie zakładki ({len(all_tabs)})")
+        refresh_btn.config(state="normal")
+        status_lbl.after(4000, lambda: status_lbl.config(text=""))
+
+    refresh_btn.config(command=_refresh_all)
+
+    return container
 
 if __name__ == "__main__":
     root = tk.Tk()

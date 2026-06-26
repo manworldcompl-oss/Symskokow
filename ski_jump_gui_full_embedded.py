@@ -1,4 +1,4 @@
-# Biblioteki standardowe
+﻿# Biblioteki standardowe
 import os
 import glob
 import re
@@ -24,6 +24,7 @@ import ski_jump_simulator_random_v6 as sim
 from flags_cache import FLAG_CACHE
 from ski_jump_simulator_random_v6 import _fis_points_for_place
 from aktualizuj_klasyfikacje import aktualizuj_najnowszy_wynik
+from week_runner_mixin import WeekRunnerMixin
 
 # --- FLAG CACHE HELPERS (auto-injected) ---
 def _flag_cached(code: str | None):
@@ -409,7 +410,7 @@ class KlasyfikacjeTab(ttk.Frame):
         return candidates[0]
 
     def load_csv_dir(self):
-        root = self.dir_var.get().strip() or "./S44/Klasyfikacje S44"
+        root = self.dir_var.get().strip() or "./S51/Klasyfikacje S51"
         tags = [t for t in self.DEFAULT_ORDER]
         missing = 0
         self.sheet_data = {}
@@ -544,13 +545,13 @@ BYE_NAME_RE = re.compile(r'^\s*(?:\[\s*BYE\s*\]|BYE(?:\s+\d+)?)\s*$', re.I)
 
 # === HELPERY v3 (meta dla Upadków) ===
 # === RESOLVER ŚCIEŻEK (szuka w CWD i przy pliku .py) ===
-# === UNIVERSAL FILE LOCATOR (obsługuje S51/ i S44/) ===
+# === UNIVERSAL FILE LOCATOR (obsługuje S51/ i S51/) ===
 def _find_nearby_file(basename, alt_patterns=()):
     """
     Szuka pliku wg nazwy/wzorca w:
       - cwd
       - folderze tego pliku
-      - podfolderach 'S51' i 'S44' (dla obu powyższych korzeni)
+      - podfolderach 'S51' i 'S51' (dla obu powyższych korzeni)
     Wspiera zarówno dokładne nazwy jak i globy (np. '*Sztab* S51*.csv').
     Zwraca ścieżkę jako str albo None.
     """
@@ -561,11 +562,11 @@ def _find_nearby_file(basename, alt_patterns=()):
             roots.append(Path(__file__).resolve().parent)
         except Exception:
             pass
-        # dorzuć warianty S51/ i S44/
+        # dorzuć warianty S51/ i S51/
         ext = []
         for r in roots:
             ext.append(r / "S51")
-            ext.append(r / "S44")
+            ext.append(r / "S51")
         return roots + ext
 
     roots = [p for p in _roots() if p.exists()]
@@ -604,9 +605,9 @@ def _find_nearby_file(basename, alt_patterns=()):
                 except Exception:
                     continue
 
-    # 3) Ostatnia deska ratunku: rekursywnie w S51/ i S44/ (jak ktoś jeszcze niżej schował)
+    # 3) Ostatnia deska ratunku: rekursywnie w S51/ i S51/ (jak ktoś jeszcze niżej schował)
     for r in roots:
-        if r.name.upper() in {"S51", "S44"} and r.is_dir():
+        if r.name.upper() in {"S51", "S51"} and r.is_dir():
             for pat in patterns:
                 try:
                     for f in r.rglob(pat):
@@ -848,6 +849,7 @@ def simulate_full_ko64_tournament(
     wind_takeoff_gain: float,
     wind_flight_gain: float,
     judges_rho: float,
+    ability_scale: float = 100.0,
 ):
     if meter_value is None:
         meter_value = sim.compute_meter_value(K)
@@ -862,6 +864,7 @@ def simulate_full_ko64_tournament(
         rng=rng, randomness=randomness, elite_regress=elite_regress,
         wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
         wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+        ability_scale=ability_scale,
         sort_output=True,
     )
     kval_rank = kwal_df.copy()
@@ -979,6 +982,7 @@ def simulate_full_ko64_tournament(
                         rng=rng, randomness=randomness, elite_regress=elite_regress,
                         wind_phi=wind_phi, wind_takeoff_gain=wind_takeoff_gain,
                         wind_flight_gain=wind_flight_gain, judges_rho=judges_rho,
+                        ability_scale=ability_scale,
                         sort_output=sort_out,
                     )
 
@@ -1364,7 +1368,919 @@ def _prepare_falls_df_for_gui(df):
 def build_gui(parent):
     return MainFrame(parent)
 
-class MainFrame(ttk.Frame):
+"""
+liga_1vs1_tab.py  v5
+====================
+- Pary losowane od razu przy losowaniu grup (wszystkie 7 kolejek)
+- Flagi przy zawodniku (FrozenFirstColTable) we wszystkich tabelach
+- Zapis/odczyt automatyczny CSV w ./S51/Liga1v1/
+
+INSTALACJA:
+1. Wklej całą tę klasę do ski_jump_gui_full_embedded.py przed klasą MainFrame.
+2. W MainFrame._build(), po nb.add(self.tab_falls, text="Upadki") dodaj:
+       self.tab_liga1vs1 = ttk.Frame(nb)
+       nb.add(self.tab_liga1vs1, text="Liga 1vs1")
+       self._liga1vs1 = Liga1vs1Tab(self.tab_liga1vs1, main_frame=self)
+       self._liga1vs1.pack(fill=tk.BOTH, expand=True)
+"""
+
+import random
+import tkinter as tk
+from tkinter import ttk, messagebox
+from pathlib import Path
+import pandas as pd
+
+
+LIGA_DIR = Path("./S51/Liga1v1")
+
+
+# ---------------------------------------------------------------------------
+# Czysta logika
+# ---------------------------------------------------------------------------
+
+def _oblicz_punkty_meczowe(pkt_a: float, pkt_b: float):
+    r = pkt_a - pkt_b
+    if   r > 10:   return 3.0, 0.0
+    elif r > 0:    return 2.0, 1.0
+    elif r == 0:   return 1.5, 1.5
+    elif r >= -10: return 1.0, 2.0
+    else:          return 0.0, 3.0
+
+
+def _ability(z: dict) -> float:
+    try:
+        return float(z.get('UM', 50)) * 0.7 + float(z.get('Forma', 50)) * 0.3
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _losuj_grupy(zawodnicy_m: list, zawodnicy_w: list, n_grup: int = 12):
+    grupy   = {}
+    odcieci = {}
+    for plec, lista in [('M', zawodnicy_m), ('W', zawodnicy_w)]:
+        if not lista:
+            for g in range(n_grup):
+                grupy[(plec, g)] = []
+            odcieci[plec] = []
+            continue
+        posort  = sorted(lista, key=_ability, reverse=True)
+        rozmiar = len(posort) // n_grup
+        if rozmiar % 2 == 1:
+            rozmiar -= 1
+        if rozmiar < 2:
+            rozmiar = 2
+        n_akt         = rozmiar * n_grup
+        aktywni       = posort[:n_akt]
+        odcieci[plec] = posort[n_akt:]
+        random.shuffle(aktywni)
+        koszyki = [[] for _ in range(n_grup)]
+        for i, z in enumerate(aktywni):
+            cykl = i // n_grup
+            poz  = i % n_grup
+            if cykl % 2 == 1:
+                poz = n_grup - 1 - poz
+            koszyki[poz].append(z)
+        for g, czl in enumerate(koszyki):
+            grupy[(plec, g)] = czl
+    return grupy, odcieci
+
+
+def _init_tabela(zawodnicy: list) -> list:
+    return [{
+        'zawodnik': z.get('Zawodnik', z.get('zawodnik', '')),
+        'kraj':     z.get('Kraj',     z.get('kraj', '')),
+        'pkt_m':    0.0,
+        'wygrane':  0,
+        'remisy':   0,
+        'porazki':  0,
+        'suma_pkt': 0.0,
+        'mecze':    0,
+    } for z in zawodnicy]
+
+
+def _sort_tabela(tabela: list) -> list:
+    return sorted(tabela, key=lambda r: (-r['pkt_m'], -r['wygrane'], -r['suma_pkt']))
+
+
+def _paruj(tabela: list) -> list:
+    """Losowe pary z indeksów tabeli."""
+    idx = list(range(len(tabela)))
+    random.shuffle(idx)
+    return [(idx[i], idx[i+1]) for i in range(0, len(idx)-1, 2)]
+
+
+def _pkt_map_z_cls(cls: pd.DataFrame) -> dict:
+    pkt_col = next((c for c in ['Punkty','Points','Pkt','Score'] if c in cls.columns), None)
+    if pkt_col is None:
+        return {}
+    out = {}
+    for _, row in cls.iterrows():
+        nazwa = str(row.get('Zawodnik', '')).strip()
+        try:
+            val = float(str(row[pkt_col]).replace(',', '.'))
+        except (ValueError, TypeError):
+            val = 0.0
+        out[nazwa] = val
+    return out
+
+
+# ---------------------------------------------------------------------------
+# CSV I/O
+# ---------------------------------------------------------------------------
+
+def _csv_read(path: Path) -> pd.DataFrame:
+    if not path.exists():
+        return pd.DataFrame()
+    for enc in ('utf-8-sig', 'utf-8', 'cp1250'):
+        try:
+            df = pd.read_csv(path, sep=';', encoding=enc)
+            if not df.empty:
+                return df
+        except Exception:
+            continue
+    return pd.DataFrame()
+
+
+def _csv_write(path: Path, df: pd.DataFrame):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(path, sep=';', index=False, encoding='utf-8-sig')
+
+
+def _grupy_to_df(grupy: dict, plec: str) -> pd.DataFrame:
+    wiersze = []
+    for (p, nr), tabela in grupy.items():
+        if p != plec:
+            continue
+        for r in tabela:
+            wiersze.append({'grupa': nr, **r})
+    return pd.DataFrame(wiersze)
+
+
+def _df_to_grupy(df: pd.DataFrame, plec: str) -> dict:
+    grupy = {}
+    if df.empty:
+        return grupy
+    for nr_gr, chunk in df.groupby('grupa'):
+        grupy[(plec, int(nr_gr))] = [
+            {
+                'zawodnik': str(r['zawodnik']),
+                'kraj':     str(r['kraj']),
+                'pkt_m':    float(r.get('pkt_m',    0)),
+                'wygrane':  int(r.get('wygrane',  0)),
+                'remisy':   int(r.get('remisy',   0)),
+                'porazki':  int(r.get('porazki',  0)),
+                'suma_pkt': float(r.get('suma_pkt', 0)),
+                'mecze':    int(r.get('mecze',    0)),
+            }
+            for _, r in chunk.iterrows()
+        ]
+    return grupy
+
+
+def _pary_to_df(pary: dict, plec: str) -> pd.DataFrame:
+    wiersze = []
+    for (p, nr_gr, nr_kol), lista in pary.items():
+        if p != plec:
+            continue
+        for ia, ib in lista:
+            wiersze.append({'grupa': nr_gr, 'kolejka': nr_kol, 'ia': ia, 'ib': ib})
+    return pd.DataFrame(wiersze)
+
+
+def _df_to_pary(df: pd.DataFrame, plec: str) -> dict:
+    pary = {}
+    if df.empty:
+        return pary
+    for _, r in df.iterrows():
+        klucz = (plec, int(r['grupa']), int(r['kolejka']))
+        pary.setdefault(klucz, []).append((int(r['ia']), int(r['ib'])))
+    return pary
+
+
+def _odcieci_to_df(odcieci: list) -> pd.DataFrame:
+    return pd.DataFrame([
+        {'zawodnik': z.get('Zawodnik', z.get('zawodnik', '')),
+         'kraj':     z.get('Kraj',     z.get('kraj', ''))}
+        for z in odcieci
+    ])
+
+
+def _df_to_odcieci(df: pd.DataFrame) -> list:
+    if df.empty:
+        return []
+    return [{'Zawodnik': str(r['zawodnik']), 'Kraj': str(r['kraj'])}
+            for _, r in df.iterrows()]
+
+
+def _klasyf_to_df(klasyf: list) -> pd.DataFrame:
+    return pd.DataFrame(klasyf) if klasyf else pd.DataFrame(
+        columns=['Miejsce', 'Zawodnik', 'Kraj', 'Finał']
+    )
+
+
+def _df_to_klasyf(df: pd.DataFrame) -> list:
+    if df.empty:
+        return []
+    # Normalizuj nazwy kolumn – CSV może mieć różne encodingi nagłówka 'Finał'
+    rename = {}
+    for c in df.columns:
+        cl = str(c).strip().lower()
+        if cl in ('final', 'finał', 'fina\u0142', 'fin'):
+            rename[c] = 'Finał'
+        elif cl in ('miejsce', 'place', 'pos'):
+            rename[c] = 'Miejsce'
+        elif cl in ('zawodnik', 'jumper', 'name'):
+            rename[c] = 'Zawodnik'
+        elif cl in ('kraj', 'nat', 'country'):
+            rename[c] = 'Kraj'
+    if rename:
+        df = df.rename(columns=rename)
+    # Upewnij się że Miejsce jest int
+    if 'Miejsce' in df.columns:
+        df['Miejsce'] = pd.to_numeric(df['Miejsce'], errors='coerce').fillna(0).astype(int)
+    return df.to_dict('records')
+
+
+# ---------------------------------------------------------------------------
+# Helper: FrozenFirstColTable z flagami (wrapper dla Liga1vs1)
+# ---------------------------------------------------------------------------
+
+def _make_flag_table(parent, frozen_col='Mce') -> 'FrozenFirstColTable':
+    """Tworzy FrozenFirstColTable z flagami przy Zawodniku."""
+    t = FrozenFirstColTable(parent, frozen_col=frozen_col)
+    t.enable_flags_after_name(FLAGS_DIR, kraj_col='Kraj', name_col='Zawodnik')
+    t.pack(fill=tk.BOTH, expand=True)
+    return t
+
+
+def _df_tabela(tabela: list) -> pd.DataFrame:
+    """Konwertuje tabelę grupy do DataFrame gotowego do wyświetlenia."""
+    wiersze = []
+    for i, r in enumerate(_sort_tabela(tabela), 1):
+        wiersze.append({
+            'Mce':      i,
+            'Zawodnik': r['zawodnik'],
+            'Kraj':     r['kraj'],
+            'Pkt M':    r['pkt_m'],
+            'W':        r['wygrane'],
+            'R':        r['remisy'],
+            'P':        r['porazki'],
+            'Suma pkt': round(r['suma_pkt'], 1),
+            'Mecze':    r['mecze'],
+        })
+    return pd.DataFrame(wiersze)
+
+
+def _df_mecze(pary: list, tabela: list):
+    """Zwraca (df_a, df_b) – lewa i prawa tabela par."""
+    wiersze_a, wiersze_b = [], []
+    for i, (ia, ib) in enumerate(pary, 1):
+        a = tabela[ia] if ia < len(tabela) else {}
+        b = tabela[ib] if ib < len(tabela) else {}
+        wiersze_a.append({
+            'Nr':         i,
+            'Zawodnik A': a.get('zawodnik', '?'),
+            'Kraj A':     a.get('kraj', ''),
+        })
+        wiersze_b.append({
+            '_dummy':     '',
+            'Zawodnik B': b.get('zawodnik', '?'),
+            'Kraj B':     b.get('kraj', ''),
+        })
+    df_a = pd.DataFrame(wiersze_a) if wiersze_a else pd.DataFrame(
+        columns=['Nr', 'Zawodnik A', 'Kraj A'])
+    df_b = pd.DataFrame(wiersze_b) if wiersze_b else pd.DataFrame(
+        columns=['_dummy', 'Zawodnik B', 'Kraj B'])
+    return df_a, df_b
+
+
+# ---------------------------------------------------------------------------
+# Klasa zakładki
+# ---------------------------------------------------------------------------
+
+class Liga1vs1Tab(ttk.Frame):
+
+    N_GRUP    = 12
+    N_KOLEJEK = 7
+    PROG_A    = 5
+    PROG_B    = 12
+    PROG_C    = 24
+
+    OFFSET = {'A': 0, 'B': 60, 'C': 120, 'D': 264}
+
+    def __init__(self, parent, main_frame=None):
+        super().__init__(parent)
+        self._mf = main_frame
+
+        self._grupy            = {}
+        self._pary             = {}
+        self._cls_m            = None
+        self._cls_w            = None
+        self._klasyfikacja     = {'M': [], 'W': []}
+        self._odcieci          = {'M': [], 'W': []}
+        self._roster_m         = pd.DataFrame()
+        self._roster_w         = pd.DataFrame()
+        self._biezaca_kolejka  = 1
+
+        # Referencje do tabel z flagami (tworzone w _build)
+        self._ft_tabela  = None
+        self._ft_mecze   = None
+        self._ft_mecze_b = None
+        self._ft_finaly  = None
+        self._ft_klasyf  = None
+
+        self._build()
+        self._auto_load()
+
+    # -----------------------------------------------------------------------
+    # ZAPIS / ODCZYT
+    # -----------------------------------------------------------------------
+
+    def _zapisz_wszystko(self):
+        try:
+            for plec in ['M', 'W']:
+                _csv_write(LIGA_DIR / f"grupy_{plec}.csv",
+                           _grupy_to_df(self._grupy, plec))
+                _csv_write(LIGA_DIR / f"pary_{plec}.csv",
+                           _pary_to_df(self._pary, plec))
+                _csv_write(LIGA_DIR / f"odcieci_{plec}.csv",
+                           _odcieci_to_df(self._odcieci.get(plec, [])))
+                _csv_write(LIGA_DIR / f"klasyfikacja_{plec}.csv",
+                           _klasyf_to_df(self._klasyfikacja.get(plec, [])))
+        except Exception as e:
+            self._var_status.set(f"⚠ Błąd zapisu CSV: {e}")
+
+    def _auto_load(self):
+        try:
+            zaladowano = False
+            for plec in ['M', 'W']:
+                df_gr = _csv_read(LIGA_DIR / f"grupy_{plec}.csv")
+                if not df_gr.empty:
+                    self._grupy.update(_df_to_grupy(df_gr, plec))
+                    zaladowano = True
+                df_par = _csv_read(LIGA_DIR / f"pary_{plec}.csv")
+                if not df_par.empty:
+                    self._pary.update(_df_to_pary(df_par, plec))
+                df_odc = _csv_read(LIGA_DIR / f"odcieci_{plec}.csv")
+                self._odcieci[plec] = _df_to_odcieci(df_odc)
+                df_kl = _csv_read(LIGA_DIR / f"klasyfikacja_{plec}.csv")
+                self._klasyfikacja[plec] = _df_to_klasyf(df_kl)
+
+            if zaladowano:
+                rozegrane = [k[2] for k in self._pary] if self._pary else [0]
+                self._biezaca_kolejka = min(max(rozegrane) + 1, self.N_KOLEJEK)
+                self._var_kolejka.set(self._biezaca_kolejka)
+                self._var_status.set(
+                    f"✓ Wczytano dane z {LIGA_DIR}. Kolejka: {self._biezaca_kolejka}."
+                )
+                self._odswierz_terminarz()
+                # Odśwież klasyfikację dla obu płci (domyślnie M widoczna)
+                self._var_plec_k.set('M')
+                self._odswierz_klasyf()
+        except Exception as e:
+            self._var_status.set(f"ℹ Brak danych ({e}).")
+
+    # -----------------------------------------------------------------------
+    # BUDOWA GUI
+    # -----------------------------------------------------------------------
+
+    def _build(self):
+        top = ttk.Frame(self)
+        top.pack(fill=tk.X, padx=8, pady=(6, 0))
+
+        ttk.Button(top, text="① Wczytaj zawodników",
+                   command=self._wczytaj).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(top, text="② Losuj grupy + pary",
+                   command=self._losuj_grupy_cmd).pack(side=tk.LEFT, padx=(0, 12))
+
+        ttk.Separator(top, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=4)
+
+        ttk.Label(top, text="Zapisz wynik z Podglądu jako:").pack(side=tk.LEFT, padx=(8, 4))
+        ttk.Button(top, text="♂ Mężczyźni",
+                   command=lambda: self._zapisz_cls('M')).pack(side=tk.LEFT, padx=(0, 4))
+        ttk.Button(top, text="♀ Kobiety",
+                   command=lambda: self._zapisz_cls('W')).pack(side=tk.LEFT, padx=(0, 12))
+
+        ttk.Separator(top, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=4)
+
+        ttk.Label(top, text="Kolejka:").pack(side=tk.LEFT, padx=(8, 2))
+        self._var_kolejka = tk.IntVar(value=1)
+        ttk.Spinbox(top, from_=1, to=self.N_KOLEJEK,
+                    textvariable=self._var_kolejka, width=3).pack(side=tk.LEFT)
+
+        ttk.Button(top, text="③ Uzupełnij wyniki (wszystkie grupy)",
+                   command=self._uzupelnij_wszystkie).pack(side=tk.LEFT, padx=(8, 12))
+
+        ttk.Separator(top, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=4)
+        ttk.Button(top, text="💾 Zapisz",
+                   command=self._zapisz_recznie).pack(side=tk.LEFT, padx=(8, 0))
+
+        self._var_status = tk.StringVar(value="Kliknij ① aby zacząć.")
+        ttk.Label(self, textvariable=self._var_status,
+                  foreground='#555').pack(fill=tk.X, padx=8, pady=(2, 4))
+
+        nb = ttk.Notebook(self)
+        nb.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
+        self._nb = nb
+
+        self._tab_terminarz = ttk.Frame(nb)
+        self._tab_finaly    = ttk.Frame(nb)
+        self._tab_klasyf    = ttk.Frame(nb)
+
+        nb.add(self._tab_terminarz, text="Terminarz / Tabele grup")
+        nb.add(self._tab_finaly,    text="Finały")
+        nb.add(self._tab_klasyf,    text="Klasyfikacja końcowa")
+
+        self._build_terminarz(self._tab_terminarz)
+        self._build_finaly(self._tab_finaly)
+        self._build_klasyf(self._tab_klasyf)
+
+    # -----------------------------------------------------------------------
+    # Pod-zakładka: Terminarz
+    # -----------------------------------------------------------------------
+
+    def _build_terminarz(self, parent):
+        filt = ttk.Frame(parent)
+        filt.pack(fill=tk.X, padx=6, pady=(6, 2))
+
+        ttk.Label(filt, text="Wyświetl:").pack(side=tk.LEFT)
+        self._var_plec_t = tk.StringVar(value='M')
+        ttk.Radiobutton(filt, text="Mężczyźni", variable=self._var_plec_t,
+                        value='M', command=self._odswierz_terminarz).pack(side=tk.LEFT, padx=(4, 2))
+        ttk.Radiobutton(filt, text="Kobiety", variable=self._var_plec_t,
+                        value='W', command=self._odswierz_terminarz).pack(side=tk.LEFT, padx=(0, 12))
+
+        ttk.Label(filt, text="Grupa:").pack(side=tk.LEFT)
+        self._var_grupa_t = tk.IntVar(value=0)
+        ttk.Spinbox(filt, from_=0, to=self.N_GRUP - 1,
+                    textvariable=self._var_grupa_t, width=3,
+                    command=self._odswierz_terminarz).pack(side=tk.LEFT, padx=(2, 8))
+
+        ttk.Label(filt, text="Kolejka (pary):").pack(side=tk.LEFT)
+        self._var_kolejka_t = tk.IntVar(value=1)
+        ttk.Spinbox(filt, from_=1, to=self.N_KOLEJEK,
+                    textvariable=self._var_kolejka_t, width=3,
+                    command=self._odswierz_terminarz).pack(side=tk.LEFT)
+
+        # Paned: tabela grupy | pary kolejki
+        paned = ttk.PanedWindow(parent, orient=tk.HORIZONTAL)
+        paned.pack(fill=tk.BOTH, expand=True, padx=6, pady=4)
+
+        lf_tab = ttk.LabelFrame(paned, text="Tabela grupy")
+        paned.add(lf_tab, weight=2)
+        self._ft_tabela = _make_flag_table(lf_tab, frozen_col='Mce')
+
+        lf_mec = ttk.LabelFrame(paned, text="Pary wybranej kolejki")
+        paned.add(lf_mec, weight=3)
+
+        # Tabela par: 3 sekcje w jednym LabelFrame
+        # [Nr] | [flaga Zawodnik A  Kraj A] | [vs] | [flaga Zawodnik B  Kraj B]
+        # Realizacja: FrozenFirstColTable (Nr + ZawA) | Label vs | FrozenFirstColTable (ZawB)
+        mec_frame = ttk.Frame(lf_mec)
+        mec_frame.pack(fill=tk.BOTH, expand=True)
+        mec_frame.columnconfigure(0, weight=3)
+        mec_frame.columnconfigure(1, weight=0)
+        mec_frame.columnconfigure(2, weight=3)
+        mec_frame.rowconfigure(0, weight=1)
+
+        # Lewa: Nr + Zawodnik A z flagą
+        self._ft_mecze = FrozenFirstColTable(mec_frame, frozen_col='Nr')
+        self._ft_mecze.enable_flags_after_name(FLAGS_DIR, kraj_col='Kraj A', name_col='Zawodnik A')
+        self._ft_mecze.grid(row=0, column=0, sticky='nsew')
+
+        # Środek: kolumna "vs" (wąska)
+        vs_frame = ttk.Frame(mec_frame, width=28)
+        vs_frame.grid(row=0, column=1, sticky='nsew', padx=0)
+        vs_frame.pack_propagate(False)
+        ttk.Label(vs_frame, text='vs', anchor='center').pack(expand=True)
+
+        # Prawa: Zawodnik B z flagą (bez zamrożonej kolumny – Nr już jest po lewej)
+        self._ft_mecze_b = FrozenFirstColTable(mec_frame, frozen_col='_dummy')
+        self._ft_mecze_b.enable_flags_after_name(FLAGS_DIR, kraj_col='Kraj B', name_col='Zawodnik B')
+        self._ft_mecze_b.grid(row=0, column=2, sticky='nsew')
+
+        # Synchronizacja przewijania między lewą i prawą tabelą par
+        def _sync_yview_mec(*args):
+            self._ft_mecze.tv_fixed.yview_moveto(args[0])
+            self._ft_mecze.tv_main.yview_moveto(args[0])
+            self._ft_mecze_b.tv_fixed.yview_moveto(args[0])
+            self._ft_mecze_b.tv_main.yview_moveto(args[0])
+
+        self._ft_mecze.vsb.configure(command=_sync_yview_mec)
+        self._ft_mecze_b.vsb.configure(command=_sync_yview_mec)
+        self._ft_mecze.tv_main.configure(yscrollcommand=lambda *a: (
+            self._ft_mecze.vsb.set(*a), _sync_yview_mec(a[0])
+        ))
+        self._ft_mecze_b.tv_main.configure(yscrollcommand=lambda *a: (
+            self._ft_mecze_b.vsb.set(*a), _sync_yview_mec(a[0])
+        ))
+
+    # -----------------------------------------------------------------------
+    # Pod-zakładka: Finały
+    # -----------------------------------------------------------------------
+
+    def _build_finaly(self, parent):
+        top = ttk.Frame(parent)
+        top.pack(fill=tk.X, padx=6, pady=(6, 4))
+
+        ttk.Label(top, text="Płeć:").pack(side=tk.LEFT)
+        self._var_plec_f = tk.StringVar(value='M')
+        ttk.Radiobutton(top, text="M", variable=self._var_plec_f,
+                        value='M').pack(side=tk.LEFT, padx=2)
+        ttk.Radiobutton(top, text="W", variable=self._var_plec_f,
+                        value='W').pack(side=tk.LEFT, padx=(0, 12))
+
+        opisy = {
+            'A': f"TOP {self.PROG_A}",
+            'B': f"mce {self.PROG_A+1}–{self.PROG_B}",
+            'C': f"mce {self.PROG_B+1}–{self.PROG_C}",
+            'D': f"mce {self.PROG_C+1}+",
+        }
+        for lit in ['A', 'B', 'C', 'D']:
+            ttk.Button(
+                top,
+                text=f"Lista Finału {lit}  ({opisy[lit]})",
+                command=lambda l=lit: self._pokaz_liste_finalu(l)
+            ).pack(side=tk.LEFT, padx=(0, 4))
+
+        lf = ttk.LabelFrame(parent, text="Lista startowa finału")
+        lf.pack(fill=tk.BOTH, expand=True, padx=6, pady=4)
+        self._ft_finaly = _make_flag_table(lf, frozen_col='Gr.')
+
+    # -----------------------------------------------------------------------
+    # Pod-zakładka: Klasyfikacja końcowa
+    # -----------------------------------------------------------------------
+
+    def _build_klasyf(self, parent):
+        top = ttk.Frame(parent)
+        top.pack(fill=tk.X, padx=6, pady=(6, 4))
+
+        ttk.Label(top, text="Płeć:").pack(side=tk.LEFT)
+        self._var_plec_k = tk.StringVar(value='M')
+        ttk.Radiobutton(top, text="M", variable=self._var_plec_k, value='M',
+                        command=self._odswierz_klasyf).pack(side=tk.LEFT, padx=2)
+        ttk.Radiobutton(top, text="W", variable=self._var_plec_k, value='W',
+                        command=self._odswierz_klasyf).pack(side=tk.LEFT, padx=(0, 12))
+
+        ttk.Label(top, text="Uzupełnij z Podglądu →").pack(side=tk.LEFT)
+        for lit in ['A', 'B', 'C', 'D']:
+            ttk.Button(
+                top, text=f"Finał {lit}",
+                command=lambda l=lit: self._uzupelnij_final_klasyf(l)
+            ).pack(side=tk.LEFT, padx=(0, 4))
+
+        ttk.Button(top, text="Wyczyść",
+                   command=self._wyczysc_klasyf).pack(side=tk.LEFT, padx=(16, 0))
+
+        lf = ttk.LabelFrame(parent, text="Klasyfikacja końcowa turnieju")
+        lf.pack(fill=tk.BOTH, expand=True, padx=6, pady=4)
+        self._ft_klasyf = _make_flag_table(lf, frozen_col='Miejsce')
+
+    # -----------------------------------------------------------------------
+    # ① Wczytaj zawodników
+    # -----------------------------------------------------------------------
+
+    def _wczytaj(self):
+        if self._mf is None:
+            messagebox.showerror("Błąd", "Brak MainFrame."); return
+
+        df = None
+        try:
+            sel = getattr(self._mf, 'selected_df', None)
+            if sel is not None and not sel.empty:
+                df = sel.copy()
+        except Exception:
+            pass
+
+        if df is None or df.empty:
+            try:
+                import ski_jump_simulator_random_v6 as sim
+                df = sim.load_roster(Path(self._mf.var_excel.get().strip()))
+            except Exception as e:
+                messagebox.showerror("Błąd", f"Nie można wczytać:\n{e}"); return
+
+        if df is None or df.empty:
+            messagebox.showerror("Błąd", "Brak zawodników."); return
+
+        plec_col = next(
+            (c for c in ['Płeć', 'Plec', 'Sex', 'Gender'] if c in df.columns), None
+        )
+        if plec_col is None:
+            messagebox.showwarning("Uwaga", "Brak kolumny płci – wszyscy jako M.")
+            self._roster_m = df.copy()
+            self._roster_w = pd.DataFrame(columns=df.columns)
+        else:
+            m = df[plec_col].astype(str).str.upper().isin(['M', 'MAN', 'MALE', 'MĘŻCZYZNA'])
+            w = df[plec_col].astype(str).str.upper().isin(['W', 'K', 'F', 'WOMAN', 'FEMALE', 'KOBIETA'])
+            self._roster_m = df[m].reset_index(drop=True)
+            self._roster_w = df[w].reset_index(drop=True)
+
+        self._var_status.set(
+            f"✓ Wczytano: {len(self._roster_m)} M, {len(self._roster_w)} W. Kliknij ②."
+        )
+
+    # -----------------------------------------------------------------------
+    # ② Losuj grupy + wszystkie pary od razu
+    # -----------------------------------------------------------------------
+
+    def _losuj_grupy_cmd(self):
+        if self._roster_m.empty and self._roster_w.empty:
+            messagebox.showwarning("Uwaga", "Najpierw wczytaj zawodników (①)."); return
+
+        if self._grupy:
+            if not messagebox.askyesno(
+                "Uwaga",
+                "Istnieją już dane.\nLosowanie usunie wszystkie wyniki. Kontynuować?"
+            ):
+                return
+
+        self._grupy        = {}
+        self._pary         = {}
+        self._odcieci      = {'M': [], 'W': []}
+        self._klasyfikacja = {'M': [], 'W': []}
+
+        grupy, odcieci = _losuj_grupy(
+            self._roster_m.to_dict('records'),
+            self._roster_w.to_dict('records'),
+            self.N_GRUP
+        )
+        for (plec, nr), czl in grupy.items():
+            self._grupy[(plec, nr)] = _init_tabela(czl)
+        self._odcieci = odcieci
+
+        # Wylosuj pary na WSZYSTKIE kolejki od razu
+        for (plec, nr), tabela in self._grupy.items():
+            for kol in range(1, self.N_KOLEJEK + 1):
+                self._pary[(plec, nr, kol)] = _paruj(tabela)
+
+        info_parts = []
+        for plec in ['M', 'W']:
+            sizes = [len(self._grupy.get((plec, g), [])) for g in range(self.N_GRUP)]
+            n_odc = len(odcieci.get(plec, []))
+            info_parts.append(
+                f"{'M' if plec=='M' else 'W'}: {self.N_GRUP}×{sizes[0] if sizes else 0}"
+                f", odcięto {n_odc}"
+            )
+
+        self._biezaca_kolejka = 1
+        self._var_kolejka.set(1)
+        self._zapisz_wszystko()
+        self._var_status.set(
+            "✓ " + " | ".join(info_parts) +
+            f". Pary na {self.N_KOLEJEK} kolejek wylosowane. Kliknij ③ po uzupełnieniu wyników."
+        )
+        self._odswierz_terminarz()
+
+    # -----------------------------------------------------------------------
+    # Zapisz wynik z Podglądu
+    # -----------------------------------------------------------------------
+
+    def _zapisz_cls(self, plec: str):
+        if self._mf is None:
+            messagebox.showerror("Błąd", "Brak MainFrame."); return
+        cls = getattr(self._mf, '_last_final_cls', None)
+        if cls is None or not isinstance(cls, pd.DataFrame) or cls.empty:
+            messagebox.showerror("Błąd", "Brak wyników w Podglądzie."); return
+        if plec == 'M':
+            self._cls_m = cls.copy()
+            self._var_status.set(f"✓ Wynik zapisany jako MĘŻCZYŹNI ({len(cls)} zawodników).")
+        else:
+            self._cls_w = cls.copy()
+            self._var_status.set(f"✓ Wynik zapisany jako KOBIETY ({len(cls)} zawodników).")
+
+    # -----------------------------------------------------------------------
+    # ③ Uzupełnij wyniki
+    # -----------------------------------------------------------------------
+
+    def _uzupelnij_wszystkie(self):
+        nr_kol = self._var_kolejka.get()
+
+        brak = []
+        if self._cls_m is None: brak.append("M  (kliknij ♂ Mężczyźni)")
+        if self._cls_w is None: brak.append("W  (kliknij ♀ Kobiety)")
+        if brak:
+            messagebox.showwarning(
+                "Brak wyników",
+                "Najpierw zapisz wyniki z Podglądu:\n" + "\n".join(f"  • {b}" for b in brak)
+            ); return
+
+        pm_m = _pkt_map_z_cls(self._cls_m)
+        pm_w = _pkt_map_z_cls(self._cls_w)
+        bledy = []
+        uzupelnione = 0
+
+        for (plec, nr_gr), tabela in self._grupy.items():
+            klucz_par = (plec, nr_gr, nr_kol)
+            if klucz_par not in self._pary:
+                continue
+            pm = pm_m if plec == 'M' else pm_w
+            for ia, ib in self._pary[klucz_par]:
+                a, b = tabela[ia], tabela[ib]
+                pa = pm.get(a['zawodnik'])
+                pb = pm.get(b['zawodnik'])
+                if pa is None or pb is None:
+                    bledy.append(f"{a['zawodnik']} vs {b['zawodnik']} ({plec} gr.{nr_gr})")
+                    continue
+                pma, pmb = _oblicz_punkty_meczowe(pa, pb)
+                a['pkt_m'] += pma;   b['pkt_m'] += pmb
+                a['suma_pkt'] += pa; b['suma_pkt'] += pb
+                a['mecze'] += 1;     b['mecze'] += 1
+                if pma > pmb:   a['wygrane'] += 1; b['porazki'] += 1
+                elif pmb > pma: b['wygrane'] += 1; a['porazki'] += 1
+                else:           a['remisy']  += 1; b['remisy']  += 1
+                uzupelnione += 1
+
+        self._cls_m = None
+        self._cls_w = None
+
+        if nr_kol < self.N_KOLEJEK:
+            self._var_kolejka.set(nr_kol + 1)
+            next_info = f" Następna: {nr_kol + 1}."
+        else:
+            next_info = " Faza grupowa zakończona!"
+
+        self._zapisz_wszystko()
+        info = f"✓ Kolejka {nr_kol}: {uzupelnione} meczów."
+        if bledy:
+            info += f" ⚠ Brak {len(bledy)} zawodników."
+        self._var_status.set(info + next_info)
+        self._odswierz_terminarz()
+
+    # -----------------------------------------------------------------------
+    # Finały – lista startowa
+    # -----------------------------------------------------------------------
+
+    def _pokaz_liste_finalu(self, litera: str):
+        if not self._grupy:
+            messagebox.showwarning("Uwaga", "Brak danych grup."); return
+
+        plec = self._var_plec_f.get()
+        zakresy = {
+            'A': (1,             self.PROG_A),
+            'B': (self.PROG_A+1, self.PROG_B),
+            'C': (self.PROG_B+1, self.PROG_C),
+            'D': (self.PROG_C+1, 9999),
+        }
+        od, do = zakresy[litera]
+
+        wiersze = []
+        for nr_gr in range(self.N_GRUP):
+            tab = self._grupy.get((plec, nr_gr))
+            if tab is None: continue
+            for poz, r in enumerate(_sort_tabela(tab), 1):
+                if od <= poz <= do:
+                    wiersze.append({
+                        'Gr.':       nr_gr,
+                        'Mce w gr.': poz,
+                        'Zawodnik':  r['zawodnik'],
+                        'Kraj':      r['kraj'],
+                        'Pkt M':     r['pkt_m'],
+                        'W':         r['wygrane'],
+                        'R':         r['remisy'],
+                        'P':         r['porazki'],
+                        'Suma pkt':  round(r['suma_pkt'], 1),
+                    })
+
+        wiersze.sort(key=lambda r: (-r['Pkt M'], -r['W'], -r['Suma pkt']))
+        df = pd.DataFrame(wiersze) if wiersze else pd.DataFrame()
+        self._ft_finaly.set_dataframe(df)
+        self._nb.select(self._tab_finaly)
+        self._var_status.set(
+            f"Lista Finału {litera} | {'M' if plec=='M' else 'W'} – {len(wiersze)} zawodników."
+        )
+
+    # -----------------------------------------------------------------------
+    # Klasyfikacja końcowa
+    # -----------------------------------------------------------------------
+
+    def _uzupelnij_final_klasyf(self, litera: str):
+        plec = self._var_plec_k.get()
+        cls  = self._cls_m if plec == 'M' else self._cls_w
+
+        if cls is None or cls.empty:
+            raw = getattr(self._mf, '_last_final_cls', None) if self._mf else None
+            if raw is None or not isinstance(raw, pd.DataFrame) or raw.empty:
+                messagebox.showerror(
+                    "Brak wyników",
+                    f"Brak wyniku dla {'M' if plec=='M' else 'W'}.\n"
+                    "Uruchom konkurs, potem kliknij ♂/♀."
+                ); return
+            cls = raw
+
+        zakresy = {
+            'A': (1,             self.PROG_A),
+            'B': (self.PROG_A+1, self.PROG_B),
+            'C': (self.PROG_B+1, self.PROG_C),
+            'D': (self.PROG_C+1, 9999),
+        }
+        od, do = zakresy[litera]
+
+        uprawnieni = set()
+        for nr_gr in range(self.N_GRUP):
+            tab = self._grupy.get((plec, nr_gr))
+            if tab is None: continue
+            for poz, r in enumerate(_sort_tabela(tab), 1):
+                if od <= poz <= do:
+                    uprawnieni.add(r['zawodnik'])
+
+        if not uprawnieni:
+            messagebox.showwarning("Uwaga", "Brak uprawnionych – przeprowadź fazę grupową."); return
+
+        cls_filtered = cls[
+            cls['Zawodnik'].astype(str).str.strip().isin(uprawnieni)
+        ].reset_index(drop=True)
+
+        if cls_filtered.empty:
+            messagebox.showwarning(
+                "Uwaga",
+                f"Żaden z {len(uprawnieni)} uprawnionych nie pojawił się w wynikach."
+            ); return
+
+        offset = self.OFFSET.get(litera, 0)
+
+        self._klasyfikacja[plec] = [
+            w for w in self._klasyfikacja[plec] if w['Finał'] != litera
+        ]
+        for i, (_, row) in enumerate(cls_filtered.iterrows(), 1):
+            self._klasyfikacja[plec].append({
+                'Miejsce':  offset + i,
+                'Zawodnik': str(row.get('Zawodnik', '')),
+                'Kraj':     str(row.get('Kraj', '')),
+                'Finał':    litera,
+            })
+
+        if litera == 'D':
+            odcieci    = self._odcieci.get(plec, [])
+            ostatnie   = max((w['Miejsce'] for w in self._klasyfikacja[plec]), default=self.OFFSET['D'])
+            istniejace = {w['Zawodnik'] for w in self._klasyfikacja[plec]}
+            for i, z in enumerate(odcieci, 1):
+                nazwa = z.get('Zawodnik', z.get('zawodnik', ''))
+                kraj  = z.get('Kraj',     z.get('kraj', ''))
+                if nazwa not in istniejace:
+                    self._klasyfikacja[plec].append({
+                        'Miejsce':  ostatnie + i,
+                        'Zawodnik': nazwa,
+                        'Kraj':     kraj,
+                        'Finał':    'D (odcięci)',
+                    })
+
+        self._klasyfikacja[plec].sort(key=lambda x: x['Miejsce'])
+        self._zapisz_wszystko()
+        self._odswierz_klasyf()
+
+        n_odc = len(self._odcieci.get(plec, []))
+        self._var_status.set(
+            f"✓ Klasyfikacja {'M' if plec=='M' else 'W'} – Finał {litera}: "
+            f"{len(cls_filtered)} zawodników"
+            + (f" + {n_odc} odciętych." if litera == 'D' and n_odc else ".")
+            + f" Łącznie: {len(self._klasyfikacja[plec])}."
+        )
+
+    def _wyczysc_klasyf(self):
+        plec = self._var_plec_k.get()
+        if messagebox.askyesno("Potwierdź", f"Wyczyścić klasyfikację {'M' if plec=='M' else 'W'}?"):
+            self._klasyfikacja[plec] = []
+            self._zapisz_wszystko()
+            self._odswierz_klasyf()
+
+    def _zapisz_recznie(self):
+        self._zapisz_wszystko()
+        self._var_status.set(f"✓ Zapisano do {LIGA_DIR}/")
+
+    # -----------------------------------------------------------------------
+    # Odświeżanie widoków
+    # -----------------------------------------------------------------------
+
+    def _odswierz_terminarz(self, *_):
+        plec   = self._var_plec_t.get()
+        nr_gr  = self._var_grupa_t.get()
+        nr_kol = self._var_kolejka_t.get()
+
+        tab = self._grupy.get((plec, nr_gr), [])
+
+        # Tabela grupy
+        df_tab = _df_tabela(tab)
+        if self._ft_tabela is not None:
+            self._ft_tabela.set_dataframe(df_tab)
+
+        # Pary kolejki
+        pary = self._pary.get((plec, nr_gr, nr_kol), [])
+        df_a, df_b = _df_mecze(pary, tab)
+        if self._ft_mecze is not None:
+            self._ft_mecze.set_dataframe(df_a)
+        if self._ft_mecze_b is not None:
+            self._ft_mecze_b.set_dataframe(df_b)
+
+    def _odswierz_klasyf(self, *_):
+        plec = self._var_plec_k.get()
+        dane = self._klasyfikacja.get(plec, [])
+        df   = pd.DataFrame(dane) if dane else pd.DataFrame(
+            columns=['Miejsce', 'Zawodnik', 'Kraj', 'Finał']
+        )
+        if self._ft_klasyf is not None:
+            self._ft_klasyf.set_dataframe(df)
+
+class MainFrame(WeekRunnerMixin, ttk.Frame):
     def _update_classifications_from_preview(self, season: str, cycle: str):
         """
         Aktualizuje pliki klasyfikacji na podstawie ostatnio wyświetlonej klasyfikacji końcowej.
@@ -1594,7 +2510,7 @@ class MainFrame(ttk.Frame):
             ./{season}/Klasyfikacje {season}/{season}_{tour_code}.csv
 
         Schemat kolumn:
-        - TCS / FT / NT / RAWAIR-W / BB:
+        - TCS / FNT / FT / NT / RAWAIR-W / BB:
             LP.,JUMPER,NAT,K1,K2,K3,K4,Overall
         - WILLINGEN5 / PLANICA7:
             LP.,JUMPER,NAT,Q1,K1,K2,Overall
@@ -1655,6 +2571,7 @@ class MainFrame(ttk.Frame):
         # --- schemat kolumn w zależności od turnieju ---
         tour_schema = {
             "TCS":       ["K1","K2","K3","K4"],
+            "FNT":       ["K1","K2","K3","K4"],
             "FT":        ["K1","K2","K3","K4"],
             "NT":        ["K1","K2","K3","K4"],
             "RAWAIR-W":  ["K1","K2","K3","K4"],
@@ -4026,6 +4943,12 @@ class MainFrame(ttk.Frame):
             except Exception:
                 pass
 
+        # 1b) Liczniki WC/COC/FC nad lewą tabelą - przelicz na podstawie nowego dfc
+        try:
+            self._update_wyborCH_sums(sex, dfc)
+        except Exception:
+            pass
+
         # 2) Zawodnicy (na bazie wyliczonych kwot CH)
         try:
             dfp = self._players_from_quotas(sex, quotas_df=dfc)
@@ -4092,6 +5015,26 @@ class MainFrame(ttk.Frame):
         # słownik { 'M': (var_wc, var_coc, var_fc), 'W': (...) }
         self._wybor_sumvars = getattr(self, "_wybor_sumvars", {})
         vars_tuple = self._wybor_sumvars.get(sex)
+        if not vars_tuple:
+            return
+        var_wc, var_coc, var_fc = vars_tuple
+
+        def _sum(col):
+            try:
+                return int(pd.to_numeric(df.get(col, 0), errors="coerce").fillna(0).sum())
+            except Exception:
+                return 0
+
+        var_wc.set(f"WC: {_sum('WC')}")
+        var_coc.set(f"COC: {_sum('COC')}")
+        var_fc.set(f"FC: {_sum('FC')}")
+
+    def _update_wyborCH_sums(self, sex: str, df):
+        """Liczniki WC/COC/FC nad lewą tabelą w Wybór-CH (OG-MEN / OG-WOMEN)."""
+
+        # słownik { 'M': (var_wc, var_coc, var_fc), 'W': (...) }
+        self._wyborCH_sumvars = getattr(self, "_wyborCH_sumvars", {})
+        vars_tuple = self._wyborCH_sumvars.get(sex)
         if not vars_tuple:
             return
         var_wc, var_coc, var_fc = vars_tuple
@@ -4398,9 +5341,10 @@ class MainFrame(ttk.Frame):
                 base = pd.DataFrame(columns=["Zawodnik","Kraj","Kontuzja (dni)","Długość kontuzji (WEEK)","ΔUM (kontuzja)","ΔForma (kontuzja)"])
 
             wrote_n = 0
-            csv_path = "Kontuzje S51.csv"
+            # domyślnie zapisuj w folderze sezonu ./S51/, nie w głównym katalogu
+            csv_path = os.path.join("S51", "Kontuzje S51.csv")
             try:
-                csv_path = _find_nearby_file(csv_path) or csv_path
+                csv_path = _find_nearby_file("Kontuzje S51.csv") or csv_path
             except Exception:
                 pass
 
@@ -4508,8 +5452,9 @@ class MainFrame(ttk.Frame):
         self.tab_ko64_main = ttk.Frame(nb)
         self.tab_ko_ll = ttk.Frame(nb)
         self.tab_falls = ttk.Frame(nb)
+        self.tab_liga1vs1 = ttk.Frame(nb)
         nb.add(self.tab_db, text="Baza zawodników")
-        self.tab_klasyfikacje = KlasyfikacjeTab(self.nb, default_excel="Klasyfikacje2 S44 — kopia.xlsx")
+        self.tab_klasyfikacje = KlasyfikacjeTab(self.nb, default_excel="Klasyfikacje2 S51 — kopia.xlsx")
         self.nb.add(self.tab_klasyfikacje, text="Klasyfikacje")
         nb.add(self.tab_quotas, text="Kwoty Startowe")
         nb.add(self.tab_roster, text="Zawodnicy")
@@ -4518,6 +5463,9 @@ class MainFrame(ttk.Frame):
         nb.add(self.tab_ko50_main, text="KO 50")
         nb.add(self.tab_ko64_main, text="KO 64")
         nb.add(self.tab_falls, text="Upadki")
+        nb.add(self.tab_liga1vs1, text="Liga 1vs1")
+        self._liga1vs1 = Liga1vs1Tab(self.tab_liga1vs1, main_frame=self)
+        self._liga1vs1.pack(fill=tk.BOTH, expand=True)
         # --- Toolbar Upadki: aktualizacja bazy po kontuzjach ---
         try:
             bar_falls = ttk.Frame(self.tab_falls)
@@ -4625,6 +5573,7 @@ class MainFrame(ttk.Frame):
         ttk.Button(row_week2, text="◀", width=2, command=self._week_prev).grid(row=0, column=2, sticky="w")
         ttk.Button(row_week2, text="▶", width=2, command=self._week_next).grid(row=0, column=3, sticky="w", padx=(2,8))
         ttk.Button(row_week2, text="✕ Wyczyść", command=self._clear_week_filter).grid(row=0, column=4, sticky="w")
+        self.install_week_runner_button(row_week2)
 
         row_cycle = ttk.Frame(sec_hill.body); row_cycle.grid(row=9, column=0, columnspan=3, sticky="we", pady=(2,0))
         row_cycle.columnconfigure(1, weight=1)
@@ -4639,6 +5588,8 @@ class MainFrame(ttk.Frame):
             "COCH-AF-M","COCH-AF-W","COCH-OC-M","COCH-OC-W",
             "JWC-M","JWC-W","YOG-M","YOG-W","UNI-M","UNI-W",
             "NKIC-M","NKIC-W","IST-M","IST-W",
+            "JC-M","JC-W","MC-M","MC-W","PC-M","PC-W","QC-M","QC-W",
+            "TC-M","TC-W","AC-M","AC-W","BC-M","BC-W","DC-M","DC-W",
         ]
         self.cbo_cycle = ttk.Combobox(row_cycle, textvariable=self.var_cycle,
                                        values=_CYCLES, state="readonly", width=18)
@@ -4694,6 +5645,7 @@ class MainFrame(ttk.Frame):
             "Full  (999,30 / Q:999)":     ("999,30",      999),
             "Mamut  (40,30 / Q:40)":      ("40,30",        40),
             "NKIC  (64,32,16,8,4,2 / Q:64)": ("64,32,16,8,4,2", 64),
+            "SFWC  (40,30,30,30 / Q:40)": ("40,30,30,30",  40),
         }
         self._format_presets = FORMAT_PRESETS
 
@@ -4752,11 +5704,13 @@ class MainFrame(ttk.Frame):
         self.var_randomness = tk.DoubleVar(value=1.5)
         self.var_elite_regress = tk.DoubleVar(value=1.5)
         self.var_judges_rho = tk.DoubleVar(value=0.55)
+        self.var_ability_scale = tk.DoubleVar(value=100.0)
 
         grid_entries(sec_rand.body, [
             ("Randomness", self.var_randomness, float),
             ("Elite regress", self.var_elite_regress, float),
             ("Korelacja not (—judges-rho)", self.var_judges_rho, float),
+            ("Skala UM/Formy (—ability-scale)", self.var_ability_scale, float),
         ])
 
         # --- Podgląd wyników – limity (z Podglądu do Parametrów) ---
@@ -4780,6 +5734,59 @@ class MainFrame(ttk.Frame):
            .grid(row=1, column=1, sticky="w", padx=(4,6), pady=(4,0))
         ttk.Checkbutton(row, text="Wszystkich", variable=self.var_prev_final_all)\
            .grid(row=1, column=2, sticky="w", pady=(4,0))
+
+        # ——— SEKCJA: Turniej juniorski – rozegraj wszystko ———
+        sec_batch = Labeled(self.tab_params, "Turniej juniorski – rozegraj wszystko")
+        sec_batch.pack(fill=tk.X, padx=8, pady=(0,6))
+
+        _JUN_CYCLES = [
+            "JC-M","JC-W","MC-M","MC-W","PC-M","PC-W","QC-M","QC-W",
+            "TC-M","TC-W","AC-M","AC-W","BC-M","BC-W","DC-M","DC-W",
+        ]
+
+        row_batch1 = ttk.Frame(sec_batch.body)
+        row_batch1.pack(fill=tk.X, pady=(2,4))
+
+        ttk.Label(row_batch1, text="Cykl:").pack(side=tk.LEFT)
+        self._batch_cycle_var = tk.StringVar(value="JC-M")
+        cbo_batch = ttk.Combobox(
+            row_batch1, textvariable=self._batch_cycle_var,
+            values=_JUN_CYCLES, state="readonly", width=10
+        )
+        cbo_batch.pack(side=tk.LEFT, padx=(4, 2))
+        def _batch_cycle_prev():
+            vals = _JUN_CYCLES
+            cur = self._batch_cycle_var.get()
+            idx = vals.index(cur) if cur in vals else 0
+            self._batch_cycle_var.set(vals[(idx - 1) % len(vals)])
+        def _batch_cycle_next():
+            vals = _JUN_CYCLES
+            cur = self._batch_cycle_var.get()
+            idx = vals.index(cur) if cur in vals else 0
+            self._batch_cycle_var.set(vals[(idx + 1) % len(vals)])
+        ttk.Button(row_batch1, text="◀", width=2, command=_batch_cycle_prev).pack(side=tk.LEFT, padx=(0,2))
+        ttk.Button(row_batch1, text="▶", width=2, command=_batch_cycle_next).pack(side=tk.LEFT, padx=(0,10))
+
+        ttk.Label(row_batch1, text="Sezon:").pack(side=tk.LEFT)
+        self._batch_season_var = tk.StringVar(value="S51")
+        ttk.Entry(row_batch1, textvariable=self._batch_season_var, width=6).pack(side=tk.LEFT, padx=(4, 8))
+
+        ttk.Label(row_batch1,
+            text="(Folder kalendarzy = pole powyżej)",
+            foreground="#666"
+        ).pack(side=tk.LEFT, padx=(0, 8))
+
+        row_batch2 = ttk.Frame(sec_batch.body)
+        row_batch2.pack(fill=tk.X, pady=(0,2))
+        self._batch_status_var = tk.StringVar(value="")
+        ttk.Label(row_batch2, textvariable=self._batch_status_var, foreground="#555").pack(side=tk.LEFT, padx=(0,12))
+        self._batch_pbar = ttk.Progressbar(row_batch2, mode="determinate", length=220)
+        self._batch_pbar.pack(side=tk.LEFT, padx=(0,12))
+        ttk.Button(
+            row_batch2, text="▶▶ Rozegraj cały turniej",
+            command=self._start_tournament_batch
+        ).pack(side=tk.LEFT)
+        # ——— koniec sekcji turnieju juniorskiego ———
 
         # bottom – PRZENIESIONY do zakładki "Parametry", żeby nie był ściskany przy embedzie
         bottom = ttk.Frame(self.tab_params)
@@ -5312,7 +6319,6 @@ class MainFrame(ttk.Frame):
         if df_new is None:
             return
         if df_new.empty:
-            self.log("[WYBÓR] Brak zaznaczenia do przeniesienia.")
             return
 
         # tylko podstawowe kolumny (jeśli są)
@@ -5804,6 +6810,10 @@ class MainFrame(ttk.Frame):
                 ttk.Label(sumbar, textvariable=v, font=("TkDefaultFont", 9, "bold"))\
                     .pack(side="left", padx=(0, 12))
 
+            # rejestr zmiennych liczników (do _update_wyborCH_sums / odświeżania)
+            self._wyborCH_sumvars = getattr(self, "_wyborCH_sumvars", {})
+            self._wyborCH_sumvars[sex_label] = (var_wc, var_coc, var_fc)
+
             tbl_countries = Table(left.body)
             try:
                 tbl_countries.enable_flags_after_name(FLAGS_DIR, "Kraj", "Kraj")
@@ -5827,10 +6837,7 @@ class MainFrame(ttk.Frame):
                     except Exception: pass
                 # sumy
                 try:
-                    total_wc = int(pd.to_numeric(dfc.get("WC",0), errors="coerce").fillna(0).sum())
-                    total_coc= int(pd.to_numeric(dfc.get("COC",0), errors="coerce").fillna(0).sum())
-                    total_fc = int(pd.to_numeric(dfc.get("FC",0), errors="coerce").fillna(0).sum())
-                    var_wc.set(f"WC: {total_wc}"); var_coc.set(f"COC: {total_coc}"); var_fc.set(f"FC: {total_fc}")
+                    self._update_wyborCH_sums(sex, dfc)
                 except Exception:
                     pass
 
@@ -5896,6 +6903,10 @@ class MainFrame(ttk.Frame):
             except Exception:
                 dfc = pd.DataFrame(columns=["Kraj","WC","COC","FC"])
             tbl_countries.set_dataframe(dfc)
+            try:
+                self._update_wyborCH_sums(sex_label, dfc)
+            except Exception:
+                pass
 
             try:
                 dfp = self._players_from_quotas(sex_label, quotas_df=dfc)
@@ -5981,12 +6992,12 @@ class MainFrame(ttk.Frame):
         thr = thr_box.body
 
         # defaulty (możesz zmienić na starcie)
-        self.var_thr_m_wc = getattr(self, "var_thr_m_wc", tk.DoubleVar(value=90.0))
-        self.var_thr_m_coc = getattr(self, "var_thr_m_coc", tk.DoubleVar(value=77.0))
+        self.var_thr_m_wc = getattr(self, "var_thr_m_wc", tk.DoubleVar(value=97.0))
+        self.var_thr_m_coc = getattr(self, "var_thr_m_coc", tk.DoubleVar(value=90.0))
         self.var_thr_m_fc = getattr(self, "var_thr_m_fc", tk.DoubleVar(value=0.0))
 
-        self.var_thr_w_wc = getattr(self, "var_thr_w_wc", tk.DoubleVar(value=75.0))
-        self.var_thr_w_coc = getattr(self, "var_thr_w_coc", tk.DoubleVar(value=60.0))
+        self.var_thr_w_wc = getattr(self, "var_thr_w_wc", tk.DoubleVar(value=80.0))
+        self.var_thr_w_coc = getattr(self, "var_thr_w_coc", tk.DoubleVar(value=70.0))
         self.var_thr_w_fc = getattr(self, "var_thr_w_fc", tk.DoubleVar(value=0.0))
 
         # helper do zbudowania kart JUN-M/W
@@ -6927,7 +7938,7 @@ class MainFrame(ttk.Frame):
 
                 # Usuń wiersze całkiem puste
                 df = df.replace({None: "", pd.NA: ""}).fillna("")
-                df = df[~(df.applymap(lambda x: str(x).strip() == "").all(axis=1))]
+                df = df[~(df.map(lambda x: str(x).strip() == "").all(axis=1))]
 
                 JUN_TAGS = ("JC", "MC", "PC", "QC", "TC", "AC", "BC", "DC")
 
@@ -7697,7 +8708,7 @@ class MainFrame(ttk.Frame):
         ttk.Combobox(
             bar_tour,
             textvariable=self._tour_code_var,
-            values=["TCS","FT","NT","WILLINGEN5","PLANICA7","RAWAIR-M","RAWAIR-W","BB"],
+            values=["TCS","FNT","FT","NT","WILLINGEN5","PLANICA7","RAWAIR-M","RAWAIR-W","BB"],
             width=12,
             state="readonly",
         ).pack(side=tk.LEFT, padx=(4, 12))
@@ -8071,27 +9082,81 @@ class MainFrame(ttk.Frame):
 
         # Dopasuj każdą pozycję tygodnia do wiersza w _hills_df
         filtered_rows = []
+        seen_cykl_hill = set()   # zapobiega duplikatom (cykl, skocznia) – ta sama skocznia może być w WC-M i WC-W
         for _, r in week_df.iterrows():
             skocznia_cal = str(r.get("Skocznia", "")).strip().lower()
             hs_cal = r.get("HS_num", float("nan"))
+            nat_cal = str(r.get("NAT", "")).strip().upper()
             cykl = str(r.get("__cykl", "")).strip()
             if pd.isna(hs_cal):
                 continue
 
-            candidates = self._hills_df[self._hills_df["HS_num"] == int(hs_cal)]
-            if candidates.empty:
-                continue
+            hs_int = int(hs_cal)
+            candidates = self._hills_df[self._hills_df["HS_num"] == hs_int]
 
             best = None
-            for _, row in candidates.iterrows():
-                miasto = str(row.get("Miasto", "")).strip().lower()
-                skocznia_db = str(row.get("Skocznia", "")).strip().lower()
-                if (skocznia_cal in miasto or skocznia_cal in skocznia_db or
-                        miasto in skocznia_cal or skocznia_db in skocznia_cal):
-                    best = row
-                    break
+
+            # Krok 1: dopasuj po nazwie ORAZ kraju – dokładne HS
+            if not candidates.empty:
+                for _, row in candidates.iterrows():
+                    miasto = str(row.get("Miasto", "")).strip().lower()
+                    skocznia_db = str(row.get("Skocznia", "")).strip().lower()
+                    kraj_db = str(row.get("Kraj", "")).strip().upper()
+                    name_match = (skocznia_cal in miasto or skocznia_cal in skocznia_db or
+                                  miasto in skocznia_cal or skocznia_db in skocznia_cal)
+                    nat_match = (not nat_cal) or (not kraj_db) or (nat_cal == kraj_db)
+                    if name_match and nat_match:
+                        best = row
+                        break
+
+            # Krok 2: fallback – dopasuj tylko po nazwie (bez kraju) – dokładne HS
+            if best is None and not candidates.empty:
+                for _, row in candidates.iterrows():
+                    miasto = str(row.get("Miasto", "")).strip().lower()
+                    skocznia_db = str(row.get("Skocznia", "")).strip().lower()
+                    if (skocznia_cal in miasto or skocznia_cal in skocznia_db or
+                            miasto in skocznia_cal or skocznia_db in skocznia_cal):
+                        best = row
+                        break
+
+            # Krok 3: tolerancja ±5 HS – gdy w bazie skocznia ma nieco inny HS niż w kalendarzu
             if best is None:
-                best = candidates.iloc[0]
+                cands_tol = self._hills_df[
+                    (self._hills_df["HS_num"] >= hs_int - 5) &
+                    (self._hills_df["HS_num"] <= hs_int + 5) &
+                    (self._hills_df["HS_num"] != hs_int)
+                ]
+                for _, row in cands_tol.iterrows():
+                    miasto = str(row.get("Miasto", "")).strip().lower()
+                    skocznia_db = str(row.get("Skocznia", "")).strip().lower()
+                    kraj_db = str(row.get("Kraj", "")).strip().upper()
+                    name_match = (skocznia_cal in miasto or skocznia_cal in skocznia_db or
+                                  miasto in skocznia_cal or skocznia_db in skocznia_cal)
+                    nat_match = (not nat_cal) or (not kraj_db) or (nat_cal == kraj_db)
+                    if name_match and nat_match:
+                        best = row
+                        break
+
+            # Krok 4: fallback – tylko kraj w dokładnym HS
+            if best is None and nat_cal and not candidates.empty:
+                for _, row in candidates.iterrows():
+                    kraj_db = str(row.get("Kraj", "")).strip().upper()
+                    if nat_cal == kraj_db:
+                        best = row
+                        break
+
+            # Krok 5: ostateczny fallback – pierwszy kandydat z dokładnym HS
+            if best is None:
+                if not candidates.empty:
+                    best = candidates.iloc[0]
+                else:
+                    continue  # brak jakiegokolwiek kandydata
+
+            # Pomiń jeśli ten sam (cykl, skocznia z bazy) już jest na liście
+            key = (cykl, best.name)
+            if key in seen_cykl_hill:
+                continue
+            seen_cykl_hill.add(key)
 
             label = f"[{cykl}] {best['__label']}"
             filtered_rows.append((label, best.name))
@@ -8330,12 +9395,16 @@ class MainFrame(ttk.Frame):
         except Exception:
             hs = 0
 
-        if hs > 160:
+        if base == "SFWC":
+            fmt = "SFWC  (40,30,30,30 / Q:40)"
+        elif hs > 160:
             fmt = "Mamut  (40,30 / Q:40)"
         elif base == "FC":
             fmt = "Full  (999,30 / Q:999)"
         elif base == "NKIC":
             fmt = "NKIC  (64,32,16,8,4,2 / Q:64)"
+        elif base in ("JC","MC","PC","QC","TC","AC","BC","DC"):
+            fmt = "Full  (999,30 / Q:999)"
         else:
             fmt = "Classic  (50,30 / Q:50)"
 
@@ -8493,6 +9562,14 @@ class MainFrame(ttk.Frame):
                 _select_in_tbl(tbl, base)
             _transfer_tbl(tbl)
 
+        if base in ("JC","MC","PC","QC","TC","AC","BC","DC"):
+            # Juniorzy: zawsze z tabeli Wybór → JUN, kolumna Zawody == cycle
+            if nb_wybor:
+                _switch_nb(nb_wybor, "JUN")
+            tbl = getattr(self, "_wybor_jun_tbl_m" if sex == "M" else "_wybor_jun_tbl_w", None)
+            _select_in_tbl(tbl, cycle)
+            _transfer_tbl(tbl)
+
         # f) sortuj wg klasyfikacji (odwrotnie) dla cyklow rankingowych
         if base in ("WC","COC","FC","GP","SCOC"):
             try:
@@ -8588,6 +9665,680 @@ class MainFrame(ttk.Frame):
         keep = [c for c in want if c in out.columns]
         return out[keep]
 
+    # ================================================================
+    # TURNIEJ JUNIORSKI – BATCH
+    # ================================================================
+
+    def _start_tournament_batch(self):
+        """Uruchamia batch turnieju juniorskiego w osobnym wątku."""
+        threading.Thread(target=self._tournament_batch_safe, daemon=True).start()
+
+    def _tournament_batch_safe(self):
+        try:
+            self._tournament_batch()
+        except Exception:
+            self.log("[BATCH] Krytyczny błąd:\n" + traceback.format_exc())
+            messagebox.showerror("Błąd turnieju", "Wystąpił błąd – szczegóły w logu.")
+
+    def _tournament_batch(self):
+        """
+        Rozgrywa cały turniej juniorski:
+          1. Wczytuje kalendarz Kalendarz_{season}_{cycle}.csv z folderu kalendarzy (var_calendars_dir)
+          2. Dla każdego wiersza (skocznia) buduje listę startową z tabeli Wybór-JUN
+             (zawodnicy gdzie kolumna Zawody == cycle), uruchamia _run()
+          3. Po każdym konkursie aktualizuje klasyfikację cyklu
+          4. Zbiera wszystkie upadki/kontuzje i pokazuje dialog wyboru
+        """
+        import re as _re
+
+        cycle  = self._batch_cycle_var.get().strip()
+        season = self._batch_season_var.get().strip()
+
+        # Folder kalendarzy = to samo pole co "Folder kalendarzy" nad tygodniem
+        cal_dir = self.var_calendars_dir.get().strip()
+
+        if not cycle or not season:
+            messagebox.showerror("Turniej", "Podaj cykl i sezon.")
+            return
+        if not cal_dir or not os.path.isdir(cal_dir):
+            messagebox.showerror("Turniej",
+                f"Folder kalendarzy nie jest ustawiony lub nie istnieje:\n{cal_dir!r}\n\n"
+                "Wpisz go w pole 'Folder kalendarzy:' powyżej (nad tygodniem) i kliknij Wczytaj.")
+            return
+
+        # --- wczytaj kalendarz turnieju ---
+        cal_filename = f"Kalendarz_{season}_{cycle}.csv"
+        cal_path = os.path.join(cal_dir, cal_filename)
+        if not os.path.isfile(cal_path):
+            messagebox.showerror("Turniej",
+                f"Nie znaleziono kalendarza:\n{cal_path}\n\n"
+                f"Oczekiwana nazwa pliku: {cal_filename}")
+            return
+
+        df_cal = None
+        for enc in ("utf-8-sig", "utf-8", "cp1250", "latin1"):
+            try:
+                df_cal = pd.read_csv(cal_path, sep=";", encoding=enc)
+                if not df_cal.empty:
+                    break
+            except Exception:
+                pass
+        if df_cal is None or df_cal.empty:
+            messagebox.showerror("Turniej", f"Nie udało się wczytać kalendarza:\n{cal_path}")
+            return
+
+        required_cols = {"Skocznia", "HS"}
+        if not required_cols.issubset(set(df_cal.columns)):
+            messagebox.showerror("Turniej",
+                f"Kalendarz musi mieć kolumny: {required_cols}\nZnaleziono: {list(df_cal.columns)}")
+            return
+
+        # Sparsuj HS (obsługa "HS100" i "100")
+        df_cal["_hs_num"] = (
+            df_cal["HS"].astype(str)
+            .str.upper().str.replace("HS", "", regex=False)
+        )
+        df_cal["_hs_num"] = pd.to_numeric(df_cal["_hs_num"], errors="coerce")
+        df_cal = df_cal.dropna(subset=["_hs_num"]).copy()
+        df_cal["_hs_num"] = df_cal["_hs_num"].astype(int)
+
+        total = len(df_cal)
+        if total == 0:
+            messagebox.showwarning("Turniej", "Kalendarz nie zawiera żadnych konkursów.")
+            return
+
+        self.log(f"\n[BATCH] Turniej {cycle} ({season}) – {total} konkursów z: {cal_filename}")
+
+        # Upewnij się że mamy wczytane skocznie
+        if not hasattr(self, "_hills_df") or self._hills_df is None or self._hills_df.empty:
+            messagebox.showerror("Turniej", "Najpierw wczytaj plik skoczni (Skocznie CSV).")
+            return
+
+        # --- pobierz listę startową z tabel Wybór-JUN ---
+        sex = "W" if cycle.endswith("-W") else "M"
+        jun_roster = self._get_jun_roster_for_cycle(cycle, sex)
+        if jun_roster is None or jun_roster.empty:
+            messagebox.showerror("Turniej",
+                f"Brak zawodników dla cyklu {cycle} w tabeli Wybór → JUN.\n\n"
+                "Upewnij się, że:\n"
+                "1. Tabela JUN jest wypełniona (odśwież w Wybór → JUN)\n"
+                f"2. Zawodnicy mają w kolumnie 'Zawody' wartość '{cycle}'")
+            return
+
+        self.log(f"[BATCH] Lista startowa: {len(jun_roster)} zawodników ({cycle})")
+
+        all_falls_frames = []
+        errors = []
+
+        def _update_pbar(done, total_n):
+            try:
+                self._batch_pbar["maximum"] = total_n
+                self._batch_pbar["value"] = done
+                self._batch_status_var.set(f"Konkurs {done}/{total_n}…")
+            except Exception:
+                pass
+
+        def _find_hill_row(skocznia_name: str, hs: int):
+            """Dopasuj wiersz w _hills_df po HS i nazwie skoczni/miasta."""
+            df_h = self._hills_df.copy()
+            candidates = df_h[df_h["HS_num"] == hs]
+            if candidates.empty:
+                return None
+            skn = skocznia_name.strip().lower()
+            for _, row in candidates.iterrows():
+                miasto = str(row.get("Miasto", "")).strip().lower()
+                skdb   = str(row.get("Skocznia", "")).strip().lower()
+                if skn in miasto or skn in skdb or miasto in skn or skdb in skn:
+                    return row
+            # fallback – pierwszy z tym HS
+            return candidates.iloc[0]
+
+        for comp_idx, (_, cal_row) in enumerate(df_cal.iterrows()):
+            skocznia_cal = str(cal_row["Skocznia"]).strip()
+            hs_cal       = int(cal_row["_hs_num"])
+
+            self.log(f"[BATCH] [{comp_idx+1}/{total}] {skocznia_cal} HS{hs_cal} ({cycle})")
+            _update_pbar(comp_idx, total)
+
+            # --- znajdź skocznie ---
+            hill_row = _find_hill_row(skocznia_cal, hs_cal)
+            if hill_row is None:
+                msg = f"Nie znaleziono skoczni: {skocznia_cal} HS{hs_cal}"
+                self.log(f"[BATCH] ⚠ {msg}")
+                errors.append(msg)
+                continue
+
+            # --- ustaw parametry skoczni ---
+            miasto = str(hill_row.get("Miasto", "")).strip()
+            k_val  = int(hill_row.get("K_num", 0))
+            hs_val = int(hill_row.get("HS_num", 0))
+            pretty = f"{miasto} (K{k_val}/HS{hs_val})".strip()
+
+            self.var_hill.set(pretty)
+            self.var_k.set(k_val)
+            self.var_hs.set(hs_val)
+            self.var_meter.set("")
+
+            # --- format wg HS ---
+            if hs_val > 160:
+                fmt = "Mamut  (40,30 / Q:40)"
+            else:
+                fmt = "Full  (999,30 / Q:999)"
+            self.var_format_preset.set(fmt)
+            if fmt in self._format_presets:
+                cuts, spots = self._format_presets[fmt]
+                self.var_round_cuts.set(cuts)
+                self.var_qual_spots.set(spots)
+
+            # --- tryb klasyczny ---
+            self.var_classic.set(True)
+            self.var_ko50.set(False)
+            self.var_ko64_full.set(False)
+
+            # --- ustaw listę startową z Wybór-JUN ---
+            try:
+                self._roster_remove_all()
+                self.selected_df = jun_roster.copy()
+                self._refresh_startlist_view()
+            except Exception as e:
+                self.log(f"[BATCH] ⚠ Błąd ustawiania listy startowej: {e}")
+
+            # --- uruchom symulację ---
+            try:
+                self.set_busy(True)
+                self._run()
+                self.set_busy(False)
+            except Exception as e:
+                self.set_busy(False)
+                msg = f"Błąd symulacji ({skocznia_cal} HS{hs_cal}): {e}"
+                self.log(f"[BATCH] ✗ {msg}")
+                errors.append(msg)
+                continue
+
+            # --- aktualizuj klasyfikację po każdym konkursie ---
+            try:
+                self._update_classifications_from_preview(season, cycle)
+                self.log(f"[BATCH] ✔ Klasyfikacja {cycle} zaktualizowana")
+            except Exception as e:
+                msg = f"Błąd aktualizacji klasyfikacji ({skocznia_cal}): {e}"
+                self.log(f"[BATCH] ⚠ {msg}")
+                errors.append(msg)
+
+            # --- aktualizuj bazę danych (rekordy, statystyki kariery, ilość konkursów) ---
+            try:
+                raport = aktualizuj_najnowszy_wynik(
+                    sezon=season,
+                    typ_cyklu=cycle,
+                    wyniki_folder="./wyniki",
+                    db_path="manager_skokow.db",
+                )
+                rek_info = ""
+                if raport.get("nowe_rekordy_skoczni", 0):
+                    rek_info += f", rekordy skoczni: {raport['nowe_rekordy_skoczni']}"
+                if raport.get("nowe_rekordy_swiata", 0):
+                    rek_info += ", 🌍 REKORD ŚWIATA"
+                if raport.get("nowe_rekordy_krajowe", 0):
+                    rek_info += f", rekordy krajowe: {raport['nowe_rekordy_krajowe']}"
+                self.log(f"[BATCH] ✔ Baza DB: {raport['zaktualizowano']} zawodników ({raport['skocznia']}){rek_info}")
+            except Exception as e:
+                msg = f"Błąd aktualizacji bazy DB ({skocznia_cal}): {e}"
+                self.log(f"[BATCH] ⚠ {msg}")
+                errors.append(msg)
+
+            # --- zbierz upadki ---
+            falls_now = getattr(self, "_falls_last_df", None)
+            if isinstance(falls_now, pd.DataFrame) and not falls_now.empty:
+                falls_copy = falls_now.copy()
+                falls_copy["_konkurs_nr"] = comp_idx + 1
+                falls_copy["_skocznia"]   = skocznia_cal
+                falls_copy["_hs"]         = hs_val
+                all_falls_frames.append(falls_copy)
+                self.log(f"[BATCH] Upadki: {len(falls_now)} zawodnik(ów)")
+
+        _update_pbar(total, total)
+        self._batch_status_var.set(f"Gotowe ({total} konkursów).")
+        self.log(f"[BATCH] Turniej zakończony. Błędy: {len(errors)}")
+        if errors:
+            self.log("[BATCH] Lista błędów:\n" + "\n".join(f"  • {e}" for e in errors))
+
+        # --- pokaż dialog kontuzji ---
+        if all_falls_frames:
+            all_falls = pd.concat(all_falls_frames, ignore_index=True)
+            inj_col = next((c for c in all_falls.columns
+                            if "kontuzja" in str(c).lower() and "dni" in str(c).lower()), None)
+            if inj_col:
+                inj_mask = pd.to_numeric(all_falls[inj_col], errors="coerce").fillna(0) > 0
+                inj_falls = all_falls[inj_mask].copy()
+            else:
+                inj_falls = all_falls.copy()
+
+            if not inj_falls.empty:
+                self.after(0, lambda f=inj_falls: self._show_injury_selection_dialog(f, season, cycle))
+            else:
+                self.log("[BATCH] Brak kontuzji do zatwierdzenia.")
+                messagebox.showinfo("Turniej zakończony",
+                    f"Turniej {cycle} ({season}) rozegrany!\n"
+                    f"Rozegrano: {total} konkursów\n"
+                    f"Kontuzje: brak"
+                    + (f"\n\nBłędy: {len(errors)}" if errors else ""))
+        else:
+            messagebox.showinfo("Turniej zakończony",
+                f"Turniej {cycle} ({season}) rozegrany!\n"
+                f"Rozegrano: {total} konkursów\n"
+                f"Upadki: brak"
+                + (f"\n\nBłędy: {len(errors)}" if errors else ""))
+
+    def _get_jun_roster_for_cycle(self, cycle: str, sex: str) -> "pd.DataFrame":
+        """
+        Pobiera listę zawodników z tabeli Wybór-JUN gdzie kolumna Zawody == cycle.
+        Zwraca DataFrame z kolumnami: Zawodnik, Kraj, UM, Forma (+ Zawody).
+        """
+        tbl = getattr(self, "_wybor_jun_tbl_m" if sex == "M" else "_wybor_jun_tbl_w", None)
+        if tbl is None:
+            return pd.DataFrame()
+
+        tv = getattr(tbl, "tv_main", getattr(tbl, "tree", None))
+        if tv is None:
+            return pd.DataFrame()
+
+        cols = list(tv["columns"])
+        rows = []
+        for iid in tv.get_children(""):
+            item = tv.item(iid)
+            values = list(item.get("values", []))
+            row = {}
+            # Zawodnik jest w kolumnie #0 (text) albo w kolumnie
+            row["Zawodnik"] = str(item.get("text", "")).strip()
+            for c, v in zip(cols, values):
+                row[str(c)] = v
+            # Jeśli Zawodnik jest też jako kolumna – preferuj
+            if "Zawodnik" in cols:
+                idx = cols.index("Zawodnik")
+                if idx < len(values) and values[idx]:
+                    row["Zawodnik"] = str(values[idx]).strip()
+
+            # filtruj po cyklu
+            zawody_val = str(row.get("Zawody", "")).strip().upper()
+            if zawody_val == cycle.strip().upper():
+                rows.append(row)
+
+        if not rows:
+            return pd.DataFrame()
+
+        df = pd.DataFrame(rows)
+        # Upewnij się że UM i Forma są liczbami
+        for c in ("UM", "Forma"):
+            if c in df.columns:
+                df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
+        return df.reset_index(drop=True)
+
+    def _show_injury_selection_dialog(self, falls_df: "pd.DataFrame", season: str, cycle: str):
+        """
+        Dialog z listą wszystkich kontuzji z turnieju.
+        Użytkownik zaznacza checkboxami które są prawdziwe → aktualizuje bazę.
+        """
+        top = tk.Toplevel(self)
+        top.title(f"Kontuzje turnieju {cycle} ({season})")
+        top.geometry("980x600")
+        top.resizable(True, True)
+        try:
+            top.grab_set()
+        except Exception:
+            pass
+
+        # Nagłówek
+        hdr = ttk.Frame(top)
+        hdr.pack(fill=tk.X, padx=10, pady=(8,0))
+        ttk.Label(hdr,
+            text=(f"Zaznacz kontuzje, które są PRAWDZIWE i mają trafić do bazy danych.\n"
+                  f"Turniej: {cycle}  |  Sezon: {season}  |  "
+                  f"Łącznie kontuzjowanych: {len(falls_df)}"),
+            wraplength=900, justify=tk.LEFT
+        ).pack(side=tk.LEFT)
+
+        # Pasek narzędziowy
+        tool = ttk.Frame(top)
+        tool.pack(fill=tk.X, padx=10, pady=(4,0))
+
+        check_vars = []  # lista (BooleanVar, row_dict)
+
+        lbl_count = ttk.Label(tool, text="")
+        lbl_count.pack(side=tk.RIGHT, padx=(0,4))
+
+        def _update_count(*_):
+            n = sum(1 for bv, _ in check_vars if bv.get())
+            lbl_count.config(text=f"Zaznaczono: {n}/{len(check_vars)}")
+
+        def _select_all():
+            for v, _ in check_vars:
+                v.set(True)
+
+        def _deselect_all():
+            for v, _ in check_vars:
+                v.set(False)
+
+        ttk.Button(tool, text="✔ Zaznacz wszystkie", command=_select_all).pack(side=tk.LEFT, padx=(0,6))
+        ttk.Button(tool, text="✕ Odznacz wszystkie", command=_deselect_all).pack(side=tk.LEFT)
+
+        # Tabela ze scrollem
+        canvas_frame = ttk.Frame(top)
+        canvas_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(6,4))
+
+        canvas = tk.Canvas(canvas_frame, borderwidth=0, highlightthickness=0)
+        vsb = ttk.Scrollbar(canvas_frame, orient="vertical", command=canvas.yview)
+        hsb = ttk.Scrollbar(canvas_frame, orient="horizontal", command=canvas.xview)
+        canvas.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        inner = ttk.Frame(canvas)
+        inner_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def _on_inner_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        inner.bind("<Configure>", _on_inner_configure)
+
+        def _on_canvas_configure(event):
+            canvas.itemconfig(inner_id, width=event.width)
+        canvas.bind("<Configure>", _on_canvas_configure)
+
+        # Znajdź kolumny kontuzji
+        dni_col  = next((c for c in falls_df.columns if "kontuzja" in str(c).lower() and "dni" in str(c).lower()), None)
+        week_col = next((c for c in falls_df.columns if "długość" in str(c).lower() and "week" in str(c).lower()), None)
+        dum_col  = next((c for c in falls_df.columns if "ΔUM" in str(c)), None)
+        dfr_col  = next((c for c in falls_df.columns if "ΔForma" in str(c)), None)
+
+        # Agreguj po zawodniku (bierzemy najgorszy wypadek z turnieju)
+        key_cols = [c for c in ["Zawodnik", "Kraj"] if c in falls_df.columns]
+        if key_cols:
+            agg_map = {"_konkurs_nr": "first", "_skocznia": "first"}
+            if dni_col:  agg_map[dni_col]  = "max"
+            if week_col: agg_map[week_col] = "max"
+            if dum_col:  agg_map[dum_col]  = "min"
+            if dfr_col:  agg_map[dfr_col]  = "min"
+            display_df = falls_df.groupby(key_cols, as_index=False).agg(agg_map)
+        else:
+            display_df = falls_df.copy()
+
+        # Nagłówki
+        headers = ["#", "✔", "Konkurs", "Skocznia", "Zawodnik", "Kraj",
+                   "Kontuzja (dni)", "Długość (WEEK)", "ΔUM", "ΔForma"]
+        col_widths = [3, 3, 6, 16, 22, 6, 11, 10, 6, 6]
+
+        for col_i, (h, w) in enumerate(zip(headers, col_widths)):
+            ttk.Label(inner, text=h, font=("", 9, "bold"),
+                      relief="groove", padding=(4,2), width=w
+                      ).grid(row=0, column=col_i, sticky="nsew", padx=1, pady=1)
+
+        def _safe(val, default=""):
+            if val is None:
+                return default
+            try:
+                if isinstance(val, float) and (val != val):  # NaN
+                    return default
+            except Exception:
+                pass
+            return str(val)
+
+        for row_i, (_, r) in enumerate(display_df.iterrows(), start=1):
+            v = tk.BooleanVar(value=True)
+            v.trace_add("write", _update_count)
+            check_vars.append((v, r.to_dict()))
+
+            bg = "#f0f0f0" if row_i % 2 == 0 else "white"
+            row_data = [
+                str(row_i),
+                "",  # checkbutton
+                _safe(r.get("_konkurs_nr", "")),
+                _safe(r.get("_skocznia", "")),
+                _safe(r.get("Zawodnik", "")),
+                _safe(r.get("Kraj", "")),
+                _safe(r.get(dni_col, "")  if dni_col  else ""),
+                _safe(r.get(week_col, "") if week_col else ""),
+                _safe(r.get(dum_col, "")  if dum_col  else ""),
+                _safe(r.get(dfr_col, "")  if dfr_col  else ""),
+            ]
+
+            for col_i, (h, val, w) in enumerate(zip(headers, row_data, col_widths)):
+                if h == "✔":
+                    cb = ttk.Checkbutton(inner, variable=v)
+                    cb.grid(row=row_i, column=col_i, sticky="nsew", padx=1, pady=1)
+                else:
+                    ttk.Label(inner, text=val, background=bg,
+                              padding=(4,2), anchor="w", width=w
+                              ).grid(row=row_i, column=col_i, sticky="nsew", padx=1, pady=1)
+
+        # Inicjuj licznik
+        _update_count()
+
+        # Scroll kółkiem myszy
+        def _on_mousewheel(event):
+            try:
+                canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+            except Exception:
+                pass
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # Wiersz tygodnia
+        week_frame = ttk.Frame(top)
+        week_frame.pack(fill=tk.X, padx=10, pady=(0,4))
+        ttk.Label(week_frame, text="Tydzień bazowy kontuzji (Week):").pack(side=tk.LEFT)
+        try:
+            _default_week = str(int(self.var_week_pick.get()))
+        except Exception:
+            _default_week = "2"
+        week_var = tk.StringVar(value=_default_week)
+        ttk.Spinbox(week_frame, from_=1, to=52, textvariable=week_var, width=5).pack(side=tk.LEFT, padx=(4,0))
+        ttk.Label(week_frame, text="  (powrót = week + długość + 1)",
+                  foreground="#666").pack(side=tk.LEFT, padx=(6,0))
+
+        # Przyciski
+        btns = ttk.Frame(top)
+        btns.pack(fill=tk.X, padx=10, pady=(0,10))
+
+        def _ok():
+            approved = [rd for bv, rd in check_vars if bv.get()]
+            wk = week_var.get()
+            top.destroy()
+            canvas.unbind_all("<MouseWheel>")
+            if not approved:
+                self.log("[BATCH] Brak zatwierdzonych kontuzji – baza nie zmieniona.")
+                return
+            self._apply_batch_injuries(approved, wk, cycle, season)
+
+        def _cancel():
+            canvas.unbind_all("<MouseWheel>")
+            top.destroy()
+            self.log("[BATCH] Kontuzje pominięte – baza nie zmieniona.")
+
+        ttk.Button(btns, text="✔ Zatwierdź zaznaczone i aktualizuj bazę",
+                   command=_ok).pack(side=tk.RIGHT, padx=(6,0))
+        ttk.Button(btns, text="✕ Anuluj (nie aktualizuj)",
+                   command=_cancel).pack(side=tk.RIGHT)
+
+        try:
+            top.update_idletasks()
+            top.lift(); top.focus_force()
+            top.attributes("-topmost", True)
+            top.after(300, lambda: top.attributes("-topmost", False))
+        except Exception:
+            pass
+
+    def _apply_batch_injuries(self, approved_rows: list, week_str: str, cycle: str, season: str):
+        """Stosuje zatwierdzone kontuzje z turnieju do bazy zawodników i Kontuzje S51.csv."""
+        try:
+            week_val = int(float(week_str))
+        except Exception:
+            week_val = 2
+
+        agg_df = pd.DataFrame(approved_rows)
+
+        def _find(df, *keywords):
+            for c in df.columns:
+                cs = str(c).lower()
+                if all(k.lower() in cs for k in keywords):
+                    return c
+            return None
+
+        dni_col  = _find(agg_df, "kontuzja", "dni")
+        week_col = _find(agg_df, "długość", "week")
+        dum_col  = next((c for c in agg_df.columns if "ΔUM" in str(c)), None)
+        dfr_col  = next((c for c in agg_df.columns if "ΔForma" in str(c)), None)
+
+        # Policz ReturnWeek
+        if week_col and week_col in agg_df.columns:
+            weeks = pd.to_numeric(agg_df[week_col], errors="coerce").fillna(0).astype(int)
+        elif dni_col and dni_col in agg_df.columns:
+            dd = pd.to_numeric(agg_df[dni_col], errors="coerce").fillna(0).astype(int)
+            weeks = dd.map(lambda d: 0 if d <= 5 else (1 + (d - 6) // 7))
+        else:
+            weeks = pd.Series([0] * len(agg_df))
+        agg_df["_ret_week"] = week_val + weeks + 1
+
+        # --- Wczytaj bazę zawodników ---
+        path = os.path.join("S51", "Zawodnicy S51gpt.csv")
+        if not os.path.exists(path):
+            _base = os.path.dirname(os.path.abspath(__file__))
+            path = os.path.join(_base, "S51", "Zawodnicy S51gpt.csv")
+        if not os.path.exists(path):
+            messagebox.showerror("Kontuzje", f"Nie znaleziono bazy zawodników:\n{path}")
+            return
+
+        def _read_any(p):
+            for kwargs in ({}, {"sep":";"}, {"sep":";","encoding":"cp1250"}, {"sep":";","encoding":"utf-8-sig"}):
+                try:
+                    df = pd.read_csv(p, **kwargs)
+                    if isinstance(df, pd.DataFrame) and not df.empty:
+                        return df
+                except Exception:
+                    pass
+            try:
+                return pd.read_excel(p)
+            except Exception:
+                return None
+
+        db = _read_any(path)
+        if not isinstance(db, pd.DataFrame) or db.empty:
+            messagebox.showerror("Kontuzje", "Nie udało się wczytać bazy zawodników.")
+            return
+
+        rename_map = {}
+        for c in list(db.columns):
+            u = str(c).strip().lower()
+            if u in ("zawodnik","jumper","name"):  rename_map[c] = "Zawodnik"
+            elif u in ("kraj","nat","code"):        rename_map[c] = "Kraj"
+            elif u.startswith("um"):               rename_map[c] = "UM"
+            elif u.startswith("forma"):            rename_map[c] = "Forma"
+            elif u.startswith("kontuzja"):         rename_map[c] = "Kontuzja"
+        if rename_map:
+            db = db.rename(columns=rename_map)
+
+        if "Kontuzja" not in db.columns:
+            db["Kontuzja"] = 0
+
+        updated = 0
+        for _, r in agg_df.iterrows():
+            name = str(r.get("Zawodnik", "")).strip()
+            nat  = str(r.get("Kraj", "")).strip()
+            dUM  = int(r.get(dum_col, 0) or 0) if dum_col and dum_col in agg_df.columns else 0
+            dFR  = int(r.get(dfr_col, 0) or 0) if dfr_col and dfr_col in agg_df.columns else 0
+            retW = int(r.get("_ret_week", 0))
+
+            col_z = db["Zawodnik"] if "Zawodnik" in db.columns else pd.Series([""] * len(db))
+            col_k = db["Kraj"]     if "Kraj"     in db.columns else pd.Series([""] * len(db))
+            mask  = col_z.astype(str).str.strip().eq(name) & col_k.astype(str).str.strip().eq(nat)
+            if not (hasattr(mask, "any") and mask.any()):
+                self.log(f"[BATCH] ⚠ Nie znaleziono w bazie: {name} ({nat})")
+                continue
+
+            if "UM" in db.columns:
+                db.loc[mask, "UM"] = (
+                    pd.to_numeric(db.loc[mask, "UM"], errors="coerce").fillna(0).astype(int) + dUM
+                ).clip(lower=0)
+            if "Forma" in db.columns:
+                db.loc[mask, "Forma"] = (
+                    pd.to_numeric(db.loc[mask, "Forma"], errors="coerce").fillna(0).astype(int) + dFR
+                ).clip(lower=0)
+            db.loc[mask, "Kontuzja"] = retW
+            updated += 1
+
+        # Zapisz bazę
+        try:
+            with open(path, "r", encoding="utf-8", errors="ignore") as fh:
+                head = fh.read(2000)
+            sep = ";" if head.count(";") >= head.count(",") else ","
+        except Exception:
+            sep = ";"
+        try:
+            db.to_csv(path, index=False, sep=sep, encoding="utf-8-sig")
+        except Exception as e:
+            messagebox.showerror("Kontuzje", f"Błąd zapisu bazy:\n{e}")
+            return
+
+        # --- Zapisz do Kontuzje S51.csv ---
+        try:
+            log_df = agg_df.copy()
+            log_df["Zawody"] = cycle
+            log_df["Week"]   = week_val
+            log_df["Powrót"] = log_df["_ret_week"]
+            if week_col and week_col in log_df.columns:
+                log_df["Długość kontuzji (WEEK)"] = pd.to_numeric(log_df[week_col], errors="coerce").fillna(0).astype(int)
+            elif "Długość kontuzji (WEEK)" not in log_df.columns:
+                log_df["Długość kontuzji (WEEK)"] = weeks.values if len(weeks) == len(log_df) else 0
+            if dum_col:  log_df["ΔUM (kontuzja)"]    = log_df.get(dum_col, 0)
+            if dfr_col:  log_df["ΔForma (kontuzja)"] = log_df.get(dfr_col, 0)
+
+            needed = ["Zawody","Week","Zawodnik","Kraj",
+                      "Kontuzja (dni)","Długość kontuzji (WEEK)",
+                      "ΔUM (kontuzja)","ΔForma (kontuzja)","Powrót"]
+            for c in needed:
+                if c not in log_df.columns:
+                    log_df[c] = pd.NA
+            log_df = log_df[needed].copy()
+
+            # domyślnie zapisuj w folderze sezonu ./S51/, nie w głównym katalogu
+            csv_path = os.path.join("S51", "Kontuzje S51.csv")
+            try:
+                csv_path = _find_nearby_file("Kontuzje S51.csv") or csv_path
+            except Exception:
+                pass
+
+            def _rc(p):
+                for sep2 in (";", ","):
+                    for enc in ("utf-8-sig", "utf-8", "cp1250"):
+                        try:
+                            d = pd.read_csv(p, sep=sep2, encoding=enc)
+                            if not d.empty:
+                                return d
+                        except Exception:
+                            pass
+                return None
+
+            old = _rc(csv_path) if os.path.exists(csv_path) else None
+            if isinstance(old, pd.DataFrame) and not old.empty:
+                key = ["Zawody","Week","Zawodnik","Kraj"]
+                out = pd.concat([old, log_df], ignore_index=True).drop_duplicates(subset=key, keep="last")
+            else:
+                out = log_df
+            out.to_csv(csv_path, index=False, sep=";", encoding="utf-8-sig")
+            self.log(f"[BATCH] Kontuzje S51.csv: dopisano {len(log_df)} wierszy")
+        except Exception as e:
+            self.log(f"[BATCH] ⚠ Błąd zapisu Kontuzje S51.csv: {e}")
+
+        self.log(f"[BATCH] ✔ Kontuzje: {updated}/{len(agg_df)} zawodników zaktualizowanych w bazie")
+        messagebox.showinfo("Kontuzje – gotowe",
+            f"Zaktualizowano: {updated} zawodników\n"
+            f"Tydzień bazowy: {week_val}\n"
+            f"Turniej: {cycle} ({season})\n\n"
+            f"Zmiany zapisane do:\n"
+            f"• {os.path.abspath(path)}\n"
+            f"• Kontuzje S51.csv")
+
+    # ================================================================
+    # koniec bloku TURNIEJ JUNIORSKI – BATCH
+    # ================================================================
+
     def run_clicked(self):
         threading.Thread(target=self._run_safe, daemon=True).start()
 
@@ -8626,6 +10377,7 @@ class MainFrame(ttk.Frame):
         randomness = float(self.var_randomness.get())
         elite_regress = float(self.var_elite_regress.get())
         judges_rho = float(self.var_judges_rho.get())
+        ability_scale = float(max(1.0, self.var_ability_scale.get()))
 
         roster = sim.load_roster(Path(excel))
         # Jeśli korzystamy z listy startowej i jest NIEPARZYSTA – dodaj techniczne BYE,
@@ -8685,7 +10437,8 @@ class MainFrame(ttk.Frame):
                 p_gate_change=p_gate, max_gate_delta=max_gate,
                 rng=rng, randomness=randomness, elite_regress=elite_regress,
                 wind_phi=wind_phi, wind_takeoff_gain=takeoff_gain,
-                wind_flight_gain=flight_gain, judges_rho=judges_rho
+                wind_flight_gain=flight_gain, judges_rho=judges_rho,
+                ability_scale=ability_scale
             )
             # Zachowaj dodatkowe arkusze (drabinka/klasyfikacja) do późniejszego rysowania zakładek
             extra = extra_ret or {}
@@ -8701,7 +10454,8 @@ class MainFrame(ttk.Frame):
                 p_gate_change=p_gate, max_gate_delta=max_gate,
                 rng=rng, randomness=randomness, elite_regress=elite_regress,
                 wind_phi=wind_phi, wind_takeoff_gain=takeoff_gain,
-                wind_flight_gain=flight_gain, judges_rho=judges_rho
+                wind_flight_gain=flight_gain, judges_rho=judges_rho,
+                ability_scale=ability_scale
             )
             extra = extra_ret or {}
             ex = extra or {}
@@ -8738,7 +10492,8 @@ class MainFrame(ttk.Frame):
                 rng=rng, randomness=randomness, elite_regress=elite_regress,
                 wind_phi=wind_phi, wind_takeoff_gain=takeoff_gain,
                 wind_flight_gain=flight_gain, judges_rho=judges_rho,
-                qual_spots=int(self.var_qual_spots.get())
+                qual_spots=int(self.var_qual_spots.get()),
+                ability_scale=ability_scale
             )
             extra = {}
 

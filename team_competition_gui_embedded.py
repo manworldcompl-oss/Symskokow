@@ -1,4 +1,4 @@
-
+﻿
 # === Global GUI-friendly exception hook (auto-log + message box + pause) ===
 
 
@@ -66,13 +66,13 @@ except Exception:
     except Exception as e:
         print(f"[DEBUG] Krytyczny błąd inicjalizacji flag: {e}")
 
-# === UNIWERSALNY WYSZUKIWACZ CSV: obsługa ./, folder pliku, ./S51/, ./S44/ ===
+# === UNIWERSALNY WYSZUKIWACZ CSV: obsługa ./, folder pliku, ./S51/, ./S51/ ===
 def _find_nearby_file(basename, alt_patterns=()):
     """
     Szuka pliku wg nazwy/wzorca w:
       - bieżącym katalogu,
       - folderze, w którym leży ten skrypt,
-      - podfolderach 'S51' i 'S44' (dla obu powyższych).
+      - podfolderach 'S51' i 'S51' (dla obu powyższych).
     Zwraca pełną ścieżkę (str) lub None.
     """
     from pathlib import Path
@@ -83,10 +83,10 @@ def _find_nearby_file(basename, alt_patterns=()):
         roots.append(Path(__file__).resolve().parent)
     except Exception:
         pass
-    # dodaj S51/ i S44/
+    # dodaj S51/ i S51/
     extra = []
     for r in list(roots):
-        extra.extend([r / "S51", r / "S44"])
+        extra.extend([r / "S51", r / "S51"])
     roots = [p for p in (roots + extra) if p.exists()]
 
     # jeżeli dostał już istniejącą ścieżkę — oddaj
@@ -122,9 +122,9 @@ def _find_nearby_file(basename, alt_patterns=()):
                 except Exception:
                     continue
 
-    # 3) rekursja tylko w S51/S44 (gdy ktoś zrobił dodatkowe podfoldery)
+    # 3) rekursja tylko w S51/S51 (gdy ktoś zrobił dodatkowe podfoldery)
     for r in roots:
-        if r.name.upper() in {"S51", "S44"} and r.is_dir():
+        if r.name.upper() in {"S51", "S51"} and r.is_dir():
             for pat in patterns:
                 try:
                     for f in r.rglob(pat):
@@ -951,6 +951,8 @@ def populate_player_rows_with_flags(tv: ttk.Treeview, df, name_col="Zawodnik", k
     # czyść tabelę i referencje do obrazków
     for iid in tv.get_children(""):
         tv.delete(iid)
+    if not hasattr(tv, "img_refs"):
+        tv.img_refs = []
     tv.img_refs[:] = []
 
     if df is None or getattr(df, "empty", True):
@@ -1240,6 +1242,7 @@ def simulate_team_competition_ext(
     style_fall_penalty: float | None = None,
     fall_base: float | None = None,
     fall_distance_gain: float | None = None,
+    ability_scale: float = 100.0,
 ):
     if meter_value is None:
         meter_value = compute_meter_value(K)
@@ -1265,6 +1268,7 @@ def simulate_team_competition_ext(
             "wind_takeoff_gain": wind_takeoff_gain,
             "wind_flight_gain": wind_flight_gain,
             "judges_rho": judges_rho,
+            "ability_scale": ability_scale,
             "max_sigma": max_sigma,
             "style_fall_penalty": style_fall_penalty,
             "fall_base": fall_base,
@@ -1812,7 +1816,13 @@ class CountrySelectFrame(ttk.Frame):
         try:
             df_q = _msc_q_summary_from_dir(dir_path, sex=sex)
         except Exception as e:
-            print(f"[MSC-Q] Brak pliku kwalifikacji ({sex}): {e}")
+            try:
+                messagebox.showerror(
+                    "MSC – Q",
+                    f"Błąd przy wczytywaniu kwalifikacji MSC ({sex}): {e}"
+                )
+            except Exception:
+                pass
             return
 
         if df_q is None or getattr(df_q, "empty", True):
@@ -2440,7 +2450,7 @@ def build_gui(parent):
 
     def _apply_injury_updates_to_db(event_name: str, week_val: int):
         import pandas as pd
-        from tkinter import filedialog, messagebox
+        from tkinter import messagebox
 
         falls_df = getattr(self, "_falls_last_df", None)
         falls_agg = getattr(self, "_falls_last_agg", None)
@@ -2493,14 +2503,20 @@ def build_gui(parent):
             week_val = int(week_val)
         except Exception:
             week_val = 0
-        falls_agg["ReturnWeek"] = week_val + weeks
+        # +1: nawet "0 tygodni kontuzji" oznacza pauzę w kolejnym tygodniu
+        # (week_val=24, weeks=0 -> 25; week_val=24, weeks=3 -> 28)
+        falls_agg["ReturnWeek"] = week_val + weeks + 1
 
-        # Wybór pliku bazy zawodników
-        path = filedialog.askopenfilename(
-            title="Wybierz plik bazy zawodników do aktualizacji",
-            filetypes=[("CSV", "*.csv"), ("Excel", "*.xlsx *.xls"), ("Wszystkie pliki", "*.*")]
+        # Automatyczne wyszukanie pliku bazy zawodników (bez okna wyboru/potwierdzenia)
+        path = _find_nearby_file(
+            "Zawodnicy S51gpt.csv",
+            alt_patterns=["*Zawodnicy* S51*.csv", "*Zawodnicy*.csv"],
         )
         if not path:
+            messagebox.showerror(
+                "Aktualizacja bazy",
+                "Nie znaleziono pliku bazy zawodników (np. 'Zawodnicy S51gpt.csv')."
+            )
             return
 
         def _read_any(p):
@@ -2732,7 +2748,7 @@ def build_gui(parent):
 
 
     # ======= ZMIENNE =======
-    excel_path = tk.StringVar(master=root, value="C:/Users/ARZEt/Desktop/Nowy folder (2)/Team S44.xlsx")
+    excel_path = tk.StringVar(master=root, value="C:/Users/ARZEt/Desktop/Nowy folder (2)/Team S51.xlsx")
     sheet_name = tk.StringVar(master=root, value="Arkusz2")
     hill_name = tk.StringVar(master=root, value="Zakopane")
     k_value = tk.StringVar(master=root, value="125")
@@ -2741,8 +2757,9 @@ def build_gui(parent):
     wind_mean_value = tk.StringVar(master=root, value="0.0")
     wind_sd_value = tk.StringVar(master=root, value="0.8")
     gate_value = tk.StringVar(master=root, value="10")
-    randomness_value = tk.StringVar(master=root, value="0.35")
-    elite_regress_value = tk.StringVar(master=root, value="1.0")
+    randomness_value = tk.StringVar(master=root, value="1.5")
+    elite_regress_value = tk.StringVar(master=root, value="1.5")
+    ability_scale_value = tk.DoubleVar(master=root, value=100.0)
 
     gate_pts_step = tk.DoubleVar(master=root, value=4.0)
     p_gate_change = tk.DoubleVar(master=root, value=0.06)
@@ -3062,7 +3079,7 @@ def build_gui(parent):
     # --- Q: łączna tabela CC z plików S51_Q_CC_M/W/X ---
     from pathlib import Path
 
-    cc_dir_var = tk.StringVar(master=root, value=str(Path("S51/Team S51")))
+    cc_dir_var = tk.StringVar(master=root, value="./S51/Team S51")
 
     # górny pasek (folder + odśwież)
     frame_q_top = ttk.Frame(tab_cc_q)
@@ -3541,9 +3558,12 @@ def build_gui(parent):
             for col in cols:
                 if col not in df.columns:
                     if col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
-                        df[col] = 0
+                        df[col] = 0.0
                     else:
                         df[col] = ""
+            for col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0).astype(float)
             df = df[cols]
 
             for _, r in df.iterrows():
@@ -3736,12 +3756,12 @@ def build_gui(parent):
         try:
             df_q = _msc_q_summary_from_dir(dir_path, sex=sex)
         except Exception as e:
-            print(f"[MSC-Klasa] Brak pliku kwalifikacji ({sex}): {e}")
+            messagebox.showerror("MSC – Klasyfikacja", f"Problem z kwalifikacjami MSC:\n{e}")
             _msc_classif_redraw_canvas(sex, None)
             return
 
         if df_q is None or df_q.empty:
-            print(f"[MSC-Klasa] Brak danych kwalifikacji MSC ({sex}).")
+            messagebox.showwarning("MSC – Klasyfikacja", "Brak danych kwalifikacji MSC.")
             _msc_classif_redraw_canvas(sex, None)
             return
 
@@ -3896,7 +3916,7 @@ def build_gui(parent):
             next_place += 1
 
         if not rows:
-            print("[MSC-Klasa] Nie udało się zbudować żadnej klasyfikacji MSC.")
+            messagebox.showwarning("MSC – Klasyfikacja", "Nie udało się zbudować żadnej klasyfikacji MSC.")
             _msc_classif_redraw_canvas(sex, None)
             return
 
@@ -6216,10 +6236,11 @@ def build_gui(parent):
         q_frame.pack(fill="both", expand=True)
 
         def _reload_q():
+            from tkinter import messagebox
             try:
                 df = _msc_q_summary_from_dir(dir_var.get().strip() or ".", sex=sex)
             except Exception as e:
-                print(f"[MSC-Q] Brak pliku kwalifikacji ({sex}): {e}")
+                messagebox.showerror("Błąd MSC-Q", str(e))
                 return
             q_frame.populate_from_df(df)
 
@@ -6424,6 +6445,7 @@ def build_gui(parent):
     add_row(left, "Belka bazowa:", gate_value, width=8)
     add_row(left, "Losowość:", randomness_value, width=8)
     add_row(left, "Regresja elit:", elite_regress_value, width=8)
+    add_row(left, "Skala UM/Formy:", ability_scale_value, width=8)
 
     ttk.Separator(left, orient="horizontal").grid(row=left.grid_size()[1], column=0, columnspan=3, sticky="ew", pady=(6,6))
     ttk.Label(left, text="Belka / Wiatr / Sędziowie", font=("TkDefaultFont", 10, "bold")).grid(row=left.grid_size()[1], column=0, columnspan=3, sticky="w")
@@ -6463,6 +6485,7 @@ def build_gui(parent):
             "wind_mean": wind_mean_value.get(), "wind_sd": wind_sd_value.get(),
             "gate": gate_value.get(), "randomness": randomness_value.get(),
             "elite_regress": elite_regress_value.get(),
+            "ability_scale": ability_scale_value.get(),
             "gate_points_per_step": gate_pts_step.get(), "p_gate_change": p_gate_change.get(),
             "max_gate_delta": max_gate_delta.get(), "wind_phi": wind_phi.get(),
             "wind_takeoff_gain": wind_takeoff_gain.get(), "wind_flight_gain": wind_flight_gain.get(),
@@ -6475,6 +6498,216 @@ def build_gui(parent):
         run_simulation()
 
     ttk.Button(tab_params, text="Start symulacji", command=run_and_save_config).grid(row=1, column=0, pady=(0,8))
+
+    # --- TEAM WEEK: combobox tygodnia + przycisk ---
+    frame_team_week = ttk.LabelFrame(tab_params, text="Rozegraj TEAM WEEK")
+    frame_team_week.grid(row=2, column=0, pady=(4, 8), padx=8, sticky="ew")
+
+    ttk.Label(frame_team_week, text="Tydzień:").pack(side="left", padx=(8, 4))
+    _team_week_var = tk.StringVar(value="8")
+    cmb_team_week = ttk.Combobox(
+        frame_team_week,
+        textvariable=_team_week_var,
+        values=("4", "8", "12", "16", "20", "24", "28", "33"),
+        width=5,
+        state="readonly",
+    )
+    cmb_team_week.pack(side="left", padx=(0, 12))
+
+    # Mapowanie tygodnia → runda CC/MSC (None = brak CC/MSC w tym tygodniu)
+    _WEEK_TO_CC_ROUND = {
+        "4": None, "8": "1", "12": "2", "16": "3",
+        "20": "1/4", "24": "1/2", "28": "Finał", "33": None,
+    }
+    # Mapowanie tygodnia → numer rundy SWISS
+    _WEEK_TO_SWISS_ROUND = {
+        "4": 1, "8": 2, "12": 3, "16": 4,
+        "20": 5, "24": 6, "28": 7, "33": 8,
+    }
+
+    def _run_team_week():
+        """Automatyzuje pełny TEAM WEEK: CC (M/W/MIX) + MSC-M + MSC-W + SWISS (M/W/MIX)."""
+        import time
+        from tkinter import messagebox
+
+        week = _team_week_var.get().strip()
+        cc_round = _WEEK_TO_CC_ROUND.get(week)
+        swiss_round_num = _WEEK_TO_SWISS_ROUND.get(week)
+
+        if not messagebox.askyesno(
+            "Rozegraj TEAM WEEK",
+            f"Tydzień {week}:\n"
+            + (f"• CC: kolejka/faza '{cc_round}' (M, W, MIX)\n" if cc_round else "• CC: pominięte\n")
+            + (f"• MSC-MEN/WOMEN: kolejka '{cc_round}'\n" if cc_round else "• MSC: pominięte\n")
+            + f"• SWISS: runda {swiss_round_num} (M, W, MIX)\n\n"
+            "Kontynuować?"
+        ):
+            return
+
+        errors = []
+
+        def _sim():
+            """Uruchamia symulację synchronicznie (bez zapisu konfiguracji)."""
+            run_simulation()
+
+        def _switch_sex(sex):
+            country_frame.sex_var.set(sex)
+            try:
+                country_frame._on_filter_change()
+            except Exception:
+                pass
+
+        def _select_swiss_row(runda_num):
+            """Zaznacza pierwszy wiersz danej rundy w tv_swiss_rounds."""
+            for iid in tv_swiss_rounds.get_children():
+                vals = tv_swiss_rounds.item(iid, "values")
+                if vals:
+                    try:
+                        r = int(float(str(vals[0])))
+                    except Exception:
+                        continue
+                    if r == runda_num:
+                        tv_swiss_rounds.selection_set(iid)
+                        tv_swiss_rounds.focus(iid)
+                        return True
+            return False
+
+        # ================================================================
+        # CC (pomijamy w tygodniach 4 i 33)
+        # ================================================================
+        if cc_round:
+            # --- CC MEN ---
+            try:
+                country_frame._clear()
+                country_frame._btn_cc_groups()
+                _switch_sex("M")
+                _sim()
+                _cc_round_var.set(cc_round)
+                _cc_update_any_from_results()
+            except Exception as e:
+                errors.append(f"CC MEN: {e}")
+
+            # --- CC WOMEN ---
+            try:
+                _switch_sex("W")
+                _sim()
+                _cc_round_var.set(cc_round)
+                _cc_update_any_from_results()
+            except Exception as e:
+                errors.append(f"CC WOMEN: {e}")
+
+            # --- CC MIX ---
+            try:
+                _switch_sex("MIX")
+                _sim()
+                _cc_round_var.set(cc_round)
+                _cc_update_any_from_results()
+            except Exception as e:
+                errors.append(f"CC MIX: {e}")
+
+        # ================================================================
+        # MSC-MEN (pomijamy w tygodniach 4 i 33)
+        # ================================================================
+        if cc_round:
+            try:
+                country_frame._clear()
+                country_frame._btn_msc_men()
+                _switch_sex("M")
+                _sim()
+                _msc_m_round_var.set(cc_round)
+                _msc_update_any_from_results("M", cc_round)
+            except Exception as e:
+                errors.append(f"MSC-MEN: {e}")
+
+        # ================================================================
+        # MSC-WOMEN (pomijamy w tygodniach 4 i 33)
+        # ================================================================
+        if cc_round:
+            try:
+                country_frame._clear()
+                country_frame._btn_msc_women()
+                _switch_sex("W")
+                _sim()
+                _msc_w_round_var.set(cc_round)
+                _msc_update_any_from_results("W", cc_round)
+            except Exception as e:
+                errors.append(f"MSC-WOMEN: {e}")
+
+        # ================================================================
+        # SWISS (wszystkie tygodnie)
+        # ================================================================
+        if swiss_round_num:
+            # --- przygotuj listę krajów: wszyscy ---
+            try:
+                country_frame._clear()
+                country_frame._add()
+            except Exception as e:
+                errors.append(f"SWISS – ładowanie krajów: {e}")
+
+            # --- generuj rundę ---
+            try:
+                if swiss_round_num == 1:
+                    _swiss_generate_first_round_from_seed()
+                else:
+                    _swiss_generate_next_round()
+                _swiss_reload_matches()
+            except Exception as e:
+                errors.append(f"SWISS – generowanie rundy {swiss_round_num}: {e}")
+
+            # --- SWISS MEN ---
+            try:
+                _switch_sex("M")
+                _sim()
+                if not _select_swiss_row(swiss_round_num):
+                    errors.append(f"SWISS MEN: nie znaleziono rundy {swiss_round_num} w tabeli")
+                else:
+                    swiss_comp_var.set("MEN")
+                    _swiss_update_from_results("MEN")
+            except Exception as e:
+                errors.append(f"SWISS MEN: {e}")
+
+            # --- SWISS WOMEN ---
+            try:
+                _switch_sex("W")
+                _sim()
+                if not _select_swiss_row(swiss_round_num):
+                    errors.append(f"SWISS WOMEN: nie znaleziono rundy {swiss_round_num} w tabeli")
+                else:
+                    swiss_comp_var.set("WOMEN")
+                    _swiss_update_from_results("WOMEN")
+            except Exception as e:
+                errors.append(f"SWISS WOMEN: {e}")
+
+            # --- SWISS MIX ---
+            try:
+                _switch_sex("MIX")
+                _sim()
+                if not _select_swiss_row(swiss_round_num):
+                    errors.append(f"SWISS MIX: nie znaleziono rundy {swiss_round_num} w tabeli")
+                else:
+                    swiss_comp_var.set("MIXED")
+                    _swiss_update_from_results("MIXED")
+            except Exception as e:
+                errors.append(f"SWISS MIX: {e}")
+
+        # --- podsumowanie ---
+        if errors:
+            messagebox.showwarning(
+                "TEAM WEEK – zakończono z błędami",
+                f"Tydzień {week} zakończony.\n\nBłędy ({len(errors)}):\n"
+                + "\n".join(f"• {e}" for e in errors)
+            )
+        else:
+            messagebox.showinfo(
+                "TEAM WEEK – gotowe",
+                f"Tydzień {week} rozegrany pomyślnie!"
+            )
+
+    ttk.Button(
+        frame_team_week,
+        text="▶▶ Rozegraj TEAM WEEK",
+        command=_run_team_week,
+    ).pack(side="left", padx=(0, 8))
 
     # --- zakładki MSC (MEN / WOMEN) na głównym notebooku ---
     tab_msc_m = ttk.Frame(notebook_main)
@@ -7672,6 +7905,8 @@ def build_gui(parent):
         updated = 0
         skipped = []
 
+        walkowery = []  # (nat_nieobecny, nat_obecny)
+
         for i in idx_round:
             nat1 = str(df.at[i, "Kraj1"]).strip().upper() if "Kraj1" in df.columns else ""
             nat2 = str(df.at[i, "Kraj2"]).strip().upper() if "Kraj2" in df.columns else ""
@@ -7680,10 +7915,66 @@ def build_gui(parent):
                 skipped.append((nat1 or "?", nat2 or "?"))
                 continue
 
-            if nat1 not in pts_map or nat2 not in pts_map:
-                skipped.append((nat1, nat2))
+            has1 = nat1 in pts_map
+            has2 = nat2 in pts_map
+
+            if not has1 and not has2:
+                # obie drużyny nieobecne – traktuj jak 0:0 (remis, obie 1 PktM)
+                # minipunkty = 0 dla obu
+                df.at[i, f"{mini_col_prefix}1"] = 0.0
+                df.at[i, f"{mini_col_prefix}2"] = 0.0
+                for side, add in (("1", 1.0), ("2", 1.0)):
+                    col = f"PktM{side}"
+                    try:
+                        old = float(df.at[i, col] or 0.0)
+                    except Exception:
+                        old = 0.0
+                    df.at[i, col] = old + add
+                for side in ("1", "2"):
+                    total_mini = (
+                        float(df.at[i, f"MinipunktyM{side}"] or 0.0)
+                        + float(df.at[i, f"MinipunktyW{side}"] or 0.0)
+                        + float(df.at[i, f"MinipunktyX{side}"] or 0.0)
+                    )
+                    df.at[i, f"Minipunkty{side}"] = round(total_mini, 1)
+                walkowery.append((f"{nat1}+{nat2}", "obie nieobecne → remis 1:1"))
+                updated += 1
                 continue
 
+            if not has1 or not has2:
+                # jedna drużyna nieobecna → walkower: nieobecna 0 PktM i 0 mini, obecna 2 PktM
+                absent_side  = "1" if not has1 else "2"
+                present_side = "2" if not has1 else "1"
+                absent_nat   = nat1 if not has1 else nat2
+                present_nat  = nat2 if not has1 else nat1
+
+                # nieobecna: 0 minipunktów, 0 PktM
+                df.at[i, f"{mini_col_prefix}{absent_side}"] = 0.0
+                df.at[i, f"Minipunkty{absent_side}"] = 0.0
+
+                # obecna: minipunkty z wyników, +2 PktM
+                present_mini = round(float(pts_map.get(present_nat, 0.0)), 1)
+                df.at[i, f"{mini_col_prefix}{present_side}"] = present_mini
+                col = f"PktM{present_side}"
+                try:
+                    old = float(df.at[i, col] or 0.0)
+                except Exception:
+                    old = 0.0
+                df.at[i, col] = old + 2.0
+
+                # przelicz Minipunkty dla obecnej strony
+                total_mini = (
+                    float(df.at[i, f"MinipunktyM{present_side}"] or 0.0)
+                    + float(df.at[i, f"MinipunktyW{present_side}"] or 0.0)
+                    + float(df.at[i, f"MinipunktyX{present_side}"] or 0.0)
+                )
+                df.at[i, f"Minipunkty{present_side}"] = round(total_mini, 1)
+
+                walkowery.append((absent_nat, present_nat))
+                updated += 1
+                continue
+
+            # --- normalny mecz: obie drużyny w wynikach ---
             mini1 = round(float(pts_map.get(nat1, 0.0)), 1)
             mini2 = round(float(pts_map.get(nat2, 0.0)), 1)
 
@@ -7717,7 +8008,6 @@ def build_gui(parent):
                 )
                 df.at[i, f"Minipunkty{side}"] = round(total_mini, 1)
 
-
             updated += 1
 
         # zapisz do CSV
@@ -7738,9 +8028,15 @@ def build_gui(parent):
 
         msg = f"Zaktualizowano rundę {runda} dla typu {human}.\n" \
               f"Mecze zaktualizowane: {updated}"
+        if walkowery:
+            szczegoly = "\n".join(
+                f"  • {ab} → walkower dla {pr}" if pr != "obie nieobecne → remis 1:1"
+                else f"  • {ab} → {pr}"
+                for ab, pr in walkowery
+            )
+            msg += f"\n\nWalkowery / nieobecności ({len(walkowery)}):\n{szczegoly}"
         if skipped:
-            # nie będę tu robił elaboratu, tylko krótkie info
-            msg += f"\nPominięte mecze (brak wyników dla krajów): {len(skipped)}"
+            msg += f"\nPominięte (brak obu krajów w meczu): {len(skipped)}"
 
         messagebox.showinfo("SWISS – wyniki", msg)
 
@@ -7996,9 +8292,13 @@ def build_gui(parent):
             for col in needed_cols:
                 if col not in df_g.columns:
                     if col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
-                        df_g[col] = 0
+                        df_g[col] = 0.0
                     else:
                         df_g[col] = ""
+            # upewnij się że kolumny numeryczne mają typ float (nie int64)
+            for col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
+                if col in df_g.columns:
+                    df_g[col] = pd.to_numeric(df_g[col], errors="coerce").fillna(0.0).astype(float)
 
             df_g["Kraj"] = df_g["Kraj"].astype(str).str.strip().str.upper()
             for col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
@@ -8176,10 +8476,10 @@ def build_gui(parent):
         ]
         for col in needed_cols:
             if col not in df.columns:
-                df[col] = 0 if col.startswith(("Punkty", "Minipunkty")) else ""
+                df[col] = 0.0 if col.startswith(("Punkty", "Minipunkty")) else ""
 
         for col in ("Punkty1", "Punkty2", "Minipunkty1", "Minipunkty2"):
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
+            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0).astype(float)
 
         df["Kraj1"] = df["Kraj1"].astype(str).str.strip().str.upper()
         df["Kraj2"] = df["Kraj2"].astype(str).str.strip().str.upper()
@@ -8328,7 +8628,9 @@ def build_gui(parent):
                 # Normalizacja kolumn
                 df_g["Kraj"] = df_g["Kraj"].astype(str).str.strip().str.upper()
                 for col in ("Punkty Zdobyte", "Punkty Stracone", "Minipunkty"):
-                    df_g[col] = pd.to_numeric(df_g[col], errors="coerce").fillna(0.0)
+                    if col not in df_g.columns:
+                        df_g[col] = 0.0
+                    df_g[col] = pd.to_numeric(df_g[col], errors="coerce").fillna(0.0).astype(float)
 
                 # Filtrujemy mecze tylko dla tej konkretnej grupy
                 group_matches = [m for m in current_matches if m.get("Grupa") == g_letter]
@@ -8410,6 +8712,14 @@ def build_gui(parent):
         if df is None:
             messagebox.showerror("Błąd", "Nie można odczytać pliku CSV.")
             return
+
+        # Wymuś float64 na kolumnach liczbowych – pandas 2.x rzuca LossySetitemError
+        # gdy próbuje wpisać float do kolumny int64 wczytanej z CSV
+        for _col in ("Punkty1", "Punkty2", "Minipunkty1", "Minipunkty2"):
+            if _col in df.columns:
+                df[_col] = pd.to_numeric(df[_col], errors="coerce").fillna(0.0).astype(float)
+            else:
+                df[_col] = 0.0
 
         # 4. Harmonogram meczów
         phase_matches = {
@@ -8967,6 +9277,7 @@ def build_gui(parent):
             wind_phi=float(wind_phi.get()), wind_takeoff_gain=float(wind_takeoff_gain.get()),
             wind_flight_gain=float(wind_flight_gain.get()), judges_rho=float(judges_rho.get()),
             finalists_n=int(finalists_n.get()), num_series=int(num_series.get()),
+            ability_scale=float(max(1.0, ability_scale_value.get())),
         )
         if klasyf is None:
             messagebox.showwarning("Brak drużyn", "Żaden kraj nie ma min. 4 zawodników.")
@@ -9050,22 +9361,36 @@ def build_gui(parent):
         if falls_df is None or getattr(falls_df, 'empty', True):
             falls_df = pd.DataFrame(columns=['Seria','Kraj','Drużyna','Zawodnik','Odległość (m)','Punkty rundy'])
         else:
-            # mamy upadki z TEAM – popraw kolumny kraj/drużyna
-            falls_df = falls_df.rename(columns={'Druzyna': 'Kraj'})
+            # mamy upadki z TEAM – zachowaj oryginalny Kraj zawodnika,
+            # kolumnę Druzyna (kod drużyny) przemianuj na Druzyna_team pomocniczo
+            if "Druzyna" in falls_df.columns:
+                falls_df = falls_df.rename(columns={'Druzyna': '_Druzyna_team'})
 
             # Kraj potrafi być DataFrame, wyciągamy pierwszą kolumnę
-            kraj_obj = falls_df["Kraj"]
-            kraj_ser = first_series(kraj_obj)
-            if kraj_ser is None:
-                kraj_ser = kraj_obj
+            if "Kraj" in falls_df.columns:
+                kraj_obj = falls_df["Kraj"]
+                kraj_ser = first_series(kraj_obj)
+                if kraj_ser is None:
+                    kraj_ser = kraj_obj
+                falls_df["Kraj"] = kraj_ser.astype(str).str.strip()
+            elif "_Druzyna_team" in falls_df.columns:
+                # fallback: brak kolumny Kraj – użyj kodu drużyny
+                falls_df["Kraj"] = falls_df["_Druzyna_team"].astype(str).str.strip()
 
-            falls_df["Kraj"] = kraj_ser.astype(str).str.strip()
-
-            # wywal duplikaty nagłówków (w tym wielokrotne "Kraj")
+            # wywal duplikaty nagłówków
             falls_df = falls_df.loc[:, ~falls_df.columns.duplicated()]
 
-            # nazwa drużyny z mapy TEAM_NAME
-            falls_df["Drużyna"] = falls_df["Kraj"].map(lambda x: TEAM_NAME.get(str(x), str(x)))
+            # nazwa drużyny: z mapy TEAM_NAME opartej na kodzie drużyny (_Druzyna_team),
+            # a jeśli go nie ma – opartej na Kraj zawodnika
+            if "_Druzyna_team" in falls_df.columns:
+                falls_df["Drużyna"] = falls_df["_Druzyna_team"].map(
+                    lambda x: TEAM_NAME.get(str(x), str(x))
+                )
+                falls_df.drop(columns=["_Druzyna_team"], inplace=True, errors="ignore")
+            else:
+                falls_df["Drużyna"] = falls_df["Kraj"].map(
+                    lambda x: TEAM_NAME.get(str(x), str(x))
+                )
 
         # --- Kontuzje po upadkach (TEAM) – użyj silnika z IND GUI, jeśli jest ---
         try:

@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """
 hills_tab.py — Moduł z dwiema podzakładkami:
  - "Skocznie"        → CSV: Skocznie S51.csv (Treeview + flagi)
@@ -1552,6 +1552,7 @@ class InfraCanvasGrid(ttk.Frame):
         ttk.Entry(bar, textvariable=self.var_path, width=60).pack(side=tk.LEFT, padx=6, fill=tk.X, expand=True)
         ttk.Button(bar, text="Wybierz…", command=self._pick_file).pack(side=tk.LEFT, padx=(6, 0))
         ttk.Button(bar, text="Odśwież", command=self.refresh).pack(side=tk.LEFT, padx=6)
+        ttk.Button(bar, text="Nowy sezon →", command=self._kopiuj_na_nowy_sezon).pack(side=tk.LEFT, padx=6)
 
         # Canvas + scroll
         wrap = ttk.Frame(self); wrap.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0,8))
@@ -1617,6 +1618,55 @@ class InfraCanvasGrid(ttk.Frame):
             except Exception:
                 continue
         return pd.DataFrame()
+
+    def _kopiuj_na_nowy_sezon(self):
+        """
+        Przenosi plik Infrastruktura S<X>.csv z folderu ./S<X>/ do ./S<X+1>/
+        i zmienia mu nazwę na Infrastruktura S<X+1>.csv.
+        Bez żadnych modyfikacji zawartości - czysta kopia + zmiana nazwy
+        (w przeciwieństwie do zakładki 'Skocznie', gdzie dodatkowo
+        przeliczana jest pojemność widowni).
+        """
+        import re as _re2
+        import shutil as _shutil
+        from pathlib import Path as _Path
+        from tkinter import messagebox
+
+        cur_path = _Path(self.var_path.get().strip())
+        if not cur_path.is_file():
+            messagebox.showerror("Błąd", f"Nie znaleziono pliku:\n{cur_path.absolute()}")
+            return
+
+        # Wykryj numer sezonu z nazwy pliku / folderu, np. "./S51/Infrastruktura S51.csv" -> S51
+        match = _re2.search(r"S(\d+)", str(cur_path))
+        if not match:
+            messagebox.showerror("Błąd", "Nie udało się wykryć numeru sezonu ze ścieżki pliku.")
+            return
+        cur_num  = int(match.group(1))
+        next_num = cur_num + 1
+        cur_tag  = f"S{cur_num}"
+        next_tag = f"S{next_num}"
+
+        # Folder docelowy (jak w 'Skocznie')
+        next_dir = cur_path.parent.parent / next_tag
+        next_dir.mkdir(parents=True, exist_ok=True)
+        dst_path = next_dir / f"Infrastruktura {next_tag}.csv"
+
+        try:
+            _shutil.copyfile(cur_path, dst_path)
+        except Exception as e:
+            messagebox.showerror("Błąd zapisu", str(e))
+            return
+
+        messagebox.showinfo(
+            "Nowy sezon – gotowe",
+            f"Plik zapisany jako:\n{dst_path.absolute()}\n\n"
+            f"Plik został przeniesiony bez żadnych zmian (tylko zmiana nazwy: {cur_tag} → {next_tag})."
+        )
+
+        # Ustaw ścieżkę i odśwież widok na nowy plik
+        self.var_path.set(str(dst_path))
+        self.refresh()
 
     # --- detect scale cols ---
     def _detect_columns(self):
@@ -1791,10 +1841,8 @@ class InfraCanvasGrid(ttk.Frame):
 class HillsCanvasGrid(InfraCanvasGrid):
     def __init__(self, parent, title_path: str, default_path=None, flags_dir=None):
         super().__init__(parent, title_path, default_path, flags_dir)
-        # Dodaj przycisk "Nowy sezon →" do istniejącego paska
-        # Pasek to pierwsze dziecko self (ttk.Frame spakowany fill=X)
-        bar = [w for w in self.winfo_children() if isinstance(w, ttk.Frame)][0]
-        ttk.Button(bar, text="Nowy sezon →", command=self._kopiuj_na_nowy_sezon).pack(side=tk.LEFT, padx=6)
+        # Przycisk "Nowy sezon →" jest już dodawany w klasie bazowej (InfraCanvasGrid),
+        # a wywoła on poniższą (nadpisaną) wersję _kopiuj_na_nowy_sezon dzięki polimorfizmowi.
 
     def _kopiuj_na_nowy_sezon(self):
         """
@@ -2246,7 +2294,10 @@ class HillsTab(ttk.Frame):
 
             if df_to_save is not None and not df_to_save.empty:
                 try:
+                    # Definiujemy ścieżkę zapisu (w tym samym folderze co inne pliki S51)
                     output_path = Path("S51/Utrzymanie Skoczni S51.csv")
+                    
+                    # Zapisujemy dane z kodowaniem cp1250 (standard dla Excela w PL)
                     df_to_save.to_csv(output_path, sep=";", index=False, encoding="cp1250")
                     messagebox.showinfo("Eksport", f"Wyeksportowano{note} do:\n{output_path}")
                 except Exception as e:
@@ -2933,6 +2984,13 @@ class HillsTab(ttk.Frame):
             country_col = nat_col if nat_col != rep_col else None
 
             changes = []
+
+            # Pandas 2.x nie pozwala wpisać str do kolumny int64 –
+            # kolumny centrów trzymają mieszane wartości ("-" i liczby),
+            # więc konwertujemy je do object przed modyfikacją.
+            for col in center_cols.values():
+                if col in df.columns and df[col].dtype != object:
+                    df[col] = df[col].astype(object)
 
             for idx in df.index:
                 row = df.loc[idx]
@@ -4287,16 +4345,25 @@ class HillBuilderTab(ttk.Frame):
                 self._df_edit.at[i, h] = s
 
         elif h in INT_COLS:
-            # tylko pojedyncza komórka, nie ruszamy całej kolumny
+            # Pandas 2.x nie pozwala wpisać int do kolumny StringDtype –
+            # konwertujemy kolumnę do object żeby przyjęła dowolny typ.
             n = self._parse_int(v)
+            if h in self._df_edit.columns and hasattr(self._df_edit[h], "dtype"):
+                import pandas.api.types as pat
+                if pat.is_string_dtype(self._df_edit[h]) or str(self._df_edit[h].dtype) in ("string", "StringDtype"):
+                    self._df_edit[h] = self._df_edit[h].astype(object)
             self._df_edit.at[i, h] = pd.NA if (n is None or pd.isna(n)) else int(n)
 
         elif h in FLOAT_COLS:
-            # tu nadal ostrożnie: nie tykamy całej kolumny, tylko bieżącą komórkę
+            # analogicznie dla float – konwertuj kolumnę do object jeśli potrzeba
             try:
                 vv = float(str(v).replace(",", "."))
             except Exception:
                 vv = float("nan")
+            if h in self._df_edit.columns and hasattr(self._df_edit[h], "dtype"):
+                import pandas.api.types as pat
+                if pat.is_string_dtype(self._df_edit[h]) or str(self._df_edit[h].dtype) in ("string", "StringDtype"):
+                    self._df_edit[h] = self._df_edit[h].astype(object)
             self._df_edit.at[i, h] = vv
 
         else:
@@ -4340,6 +4407,17 @@ class HillBuilderTab(ttk.Frame):
         # przelicz klucz (na wypadek zmiany)
         self._df_edit.at[i, "_KEY_"] = f"{self._df_edit.at[i,'Reprezentacja']} | {self._df_edit.at[i,'Kraj']} | {self._df_edit.at[i,'Miasto']} | {self._df_edit.at[i,'Skocznia']}"
 
+        # helper do formatowania liczb z odstępem tysięcy
+        def _fmt_thousands_from_any(x):
+            s = str(x).strip()
+            if s in ("", "-", "\u2013", "nan", "NaN"):
+                return ""
+            v = _to_int_safe(x)
+            if v == 0 and s == "":
+                return ""
+            txt = f"{v:,}".replace(",", " ").replace("\u00a0", " ")
+            return txt
+
         # ZAPISZ GŁÓWNY CSV (ANSI, raz)
         try:
             df_out = self._df_edit.drop(
@@ -4347,18 +4425,6 @@ class HillBuilderTab(ttk.Frame):
             ).copy()
 
             from hills_tab import _to_int_safe  # jesteśmy w tym samym pliku, ale to jest czytelne
-
-            def _fmt_thousands_from_any(x):
-                # zamień cokolwiek ("36 100", 36100.0, "", NaN) na:
-                # "" albo "36 100"
-                s = str(x).strip()
-                if s in ("", "-", "–", "nan", "NaN"):
-                    return ""
-                v = _to_int_safe(x)
-                if v == 0 and s == "":
-                    return ""
-                txt = f"{v:,}".replace(",", " ").replace("\u00a0", " ")
-                return txt
 
             for col in ["Miejsca dla kibiców", "OŚ"]:
                 if col in df_out.columns:
@@ -4369,13 +4435,71 @@ class HillBuilderTab(ttk.Frame):
             messagebox.showerror("Błąd zapisu", f"Nie udało się zapisać zmian:\n{e}")
             return
 
+        # ── PROPAGACJA KOLUMN WSPÓLNYCH KOMPLEKSU ────────────────────────────
+        # Kolumny wspólne dla całego kompleksu (Reprezentacja + Kraj + Miasto)
+        COMPLEX_COLS = ["Miejsca dla kibiców", "OŚ", "Tw", "Kk", "Ks", "Poc", "Sia", "Naś"]
+
+        rep  = self._df_edit.at[i, "Reprezentacja"] if "Reprezentacja" in self._df_edit.columns else ""
+        kraj = self._df_edit.at[i, "Kraj"]           if "Kraj"           in self._df_edit.columns else ""
+        msto = self._df_edit.at[i, "Miasto"]         if "Miasto"         in self._df_edit.columns else ""
+
+        mask_complex = (
+            (self._df_edit.get("Reprezentacja", pd.Series([""] * len(self._df_edit))) == rep) &
+            (self._df_edit.get("Kraj",           pd.Series([""] * len(self._df_edit))) == kraj) &
+            (self._df_edit.get("Miasto",         pd.Series([""] * len(self._df_edit))) == msto)
+        )
+        siostry_idx = [j for j in self._df_edit.index[mask_complex] if j != i]
+
+        # Wykryj które kolumny kompleksowe faktycznie się zmieniły
+        changed_complex = []
+        for col in COMPLEX_COLS:
+            if col not in self._df_edit.columns:
+                continue
+            old_v = str(old_vals.get(col, "")).strip()
+            new_v = str(new_vals.get(col, "")).strip()
+            if old_v != new_v:
+                changed_complex.append(col)
+
+        siostry_names = []
+        if siostry_idx and changed_complex:
+            for j in siostry_idx:
+                for col in changed_complex:
+                    self._assign_typed(j, col, new_vals.get(col, ""))
+                name = self._df_edit.at[j, "Skocznia"] if "Skocznia" in self._df_edit.columns else str(j)
+                siostry_names.append(str(name))
+
+            # Zapisz CSV ponownie z propagowanymi wartościami
+            try:
+                df_out2 = self._df_edit.drop(
+                    columns=[c for c in ["_KEY_"] if c in self._df_edit.columns]
+                ).copy()
+                for col in ["Miejsca dla kibiców", "OŚ"]:
+                    if col in df_out2.columns:
+                        df_out2[col] = df_out2[col].map(_fmt_thousands_from_any).astype("object")
+                df_out2.to_csv(self.csv_path, sep=";", index=False, encoding="cp1250")
+            except Exception:
+                pass
+
         # DOPISZ LOG ROZBUDOWY: PRZED i PO
         try:
             self._append_rebuild_snapshots(old_vals, new_vals)
         except Exception as e:
             messagebox.showwarning("Uwaga", f"Zapis zmian OK, ale nie dopisano logu do 'Rozbudowa S51.csv':\n{e}")
 
-        messagebox.showinfo("Sukces", f"Zapisano zmiany do: {self.csv_path}")
+        # Komunikat końcowy
+        if siostry_names and changed_complex:
+            cols_txt = ", ".join(changed_complex)
+            hills_lines = ["  - " + n for n in siostry_names]
+            hills_txt = "\n".join(hills_lines)
+            msg = (
+                "Zapisano zmiany do: " + str(self.csv_path) + "\n\n"
+                + "Zaktualizowano kolumny [" + cols_txt + "]\n"
+                + "w pozostalych skoczniach kompleksu:\n"
+                + hills_txt
+            )
+            messagebox.showinfo("Sukces", msg)
+        else:
+            messagebox.showinfo("Sukces", "Zapisano zmiany do: " + str(self.csv_path))
 
         try:
             # HillsTab nasłuchuje na ten event i sama wywoła przeliczenie kosztów
