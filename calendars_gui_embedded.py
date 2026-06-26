@@ -60,6 +60,12 @@ except Exception:
     Image = ImageTk = None
 
 try:
+    from hills_tab import _effective_fis_class, _FIS_CLASS_ORDER, load_operational_classes
+    _HILLS_TAB_AVAILABLE = True
+except Exception:
+    _HILLS_TAB_AVAILABLE = False
+
+try:
     import pandas as pd
 except Exception as e:  # pragma: no cover
     raise SystemExit("Ten moduł wymaga pandas: pip install pandas")
@@ -87,6 +93,33 @@ _DEF_COLOR_RULES = {
 }
 
 _POSSIBLE_TYPE_COLS = ["Typ", "Rodzaj", "Zawody", "Tryb", "Event"]
+
+# Minimalna klasa FIS wymagana do organizacji danego cyklu
+_CYCLE_MIN_FIS: dict[str, str] = {
+    "OG":   "OLYMPIC CLASS",
+    "WCH":  "OLYMPIC CLASS",
+    "SFWC": "OLYMPIC CLASS",
+    "NKIC": "OLYMPIC CLASS",
+    "IST":  "OLYMPIC CLASS",
+    "WC":   "WORLD CUP CLASS",
+    "GP":   "WORLD CUP CLASS",   # + wymagany igielit
+    "SCOC": "WORLD CUP CLASS",   # + wymagany igielit
+    "COC":  "CONTINENTAL CUP CLASS",
+    "COCH": "CONTINENTAL CUP CLASS",
+    "JWC":  "CONTINENTAL CUP CLASS",
+    "YOG":  "CONTINENTAL CUP CLASS",
+    "UNI":  "CONTINENTAL CUP CLASS",
+    "FC":   "JUNIOR CUP CLASS",
+    "JC":   "JUNIOR CUP CLASS",
+    "MC":   "JUNIOR CUP CLASS",
+    "PC":   "JUNIOR CUP CLASS",
+    "QC":   "JUNIOR CUP CLASS",
+    "TC":   "JUNIOR CUP CLASS",
+    "AC":   "JUNIOR CUP CLASS",
+    "BC":   "JUNIOR CUP CLASS",
+    "DC":   "JUNIOR CUP CLASS",
+}
+_CYCLES_NEED_IGIELIT = {"GP", "SCOC"}
 
 # ===================== Frekwencja (attendance) =====================
 
@@ -2430,6 +2463,41 @@ class SeasonPlannerFrame(ttk.Frame):
             return res.iloc[0]['Kraj']
         return "" # Zwraca pusty ciąg, jeśli nie znaleziono miasta
 
+    def _load_op_class_lookup(self) -> dict:
+        """Wczytuje klasy operacyjne i zwraca {(KRAJ, Miasto): klasa_str}."""
+        if not _HILLS_TAB_AVAILABLE:
+            return {}
+        s_str = self.season_var.get().strip()
+        op_path = Path(f"{s_str}/Klasa operacyjna {s_str}.csv")
+        if not op_path.exists():
+            op_path = APP_DIR / op_path
+        try:
+            df_op = load_operational_classes(op_path)
+            lookup = {}
+            for _, r in df_op.iterrows():
+                k = (str(r.get("Kraj", "")).strip().upper(), str(r.get("Miasto", "")).strip())
+                lookup[k] = str(r.get("Klasa", "Pełna")).strip()
+            return lookup
+        except Exception:
+            return {}
+
+    def _get_effective_fis_class(self, homologacje: list[str], op_class: str) -> str:
+        """Zwraca najwyższą efektywną klasę FIS dla listy homologacji po uwzględnieniu klasy operacyjnej."""
+        if not _HILLS_TAB_AVAILABLE:
+            best_raw = next((h for h in homologacje if "OLYMPIC" in h), None) or \
+                       next((h for h in homologacje if "WORLD CUP" in h), None) or \
+                       next((h for h in homologacje if "CONTINENTAL" in h), None) or \
+                       next((h for h in homologacje if "JUNIOR" in h), None) or ""
+            return best_raw
+        order_map = {c: i for i, c in enumerate(_FIS_CLASS_ORDER)}
+        best_eff_idx = len(_FIS_CLASS_ORDER)  # brak klasy
+        for h in homologacje:
+            eff = _effective_fis_class(h, op_class)
+            idx = order_map.get(eff, len(_FIS_CLASS_ORDER))
+            if idx < best_eff_idx:
+                best_eff_idx = idx
+        return _FIS_CLASS_ORDER[best_eff_idx] if best_eff_idx < len(_FIS_CLASS_ORDER) else "-"
+
     def apply_host_filters(self):
         """Filtruje listę skoczni, dbając o to, by liczniki nie zerowały się między cyklami."""
         try:
@@ -2443,14 +2511,29 @@ class SeasonPlannerFrame(ttk.Frame):
         junior_group = ["JC", "MC", "PC", "QC", "TC", "AC", "BC", "DC"]
         summer_group = ["GP", "SCOC"]
 
+        # 2. Klasy operacyjne
+        op_lookup = self._load_op_class_lookup()
+
+        # 3. Minimalna klasa FIS wymagana dla bieżącego cyklu
+        cycle_base = cycle.split("-")[0]  # np. "WC" z "WC-M"
+        min_fis = _CYCLE_MIN_FIS.get(cycle_base, "")
+        needs_igielit = cycle_base in _CYCLES_NEED_IGIELIT
+
+        # Indeks porządku klas FIS (niższy = wyższa klasa)
+        fis_order = {c: i for i, c in enumerate(_FIS_CLASS_ORDER)} if _HILLS_TAB_AVAILABLE else {}
+
         self.tree_hosts.delete(*self.tree_hosts.get_children())
         if not hasattr(self, 'hills_df'): return
 
-        df = self.hills_df.groupby(['Kraj', 'Miasto']).agg({
+        # Grupuj z igielitem
+        agg_dict = {
             'HS': lambda x: sorted(x.unique(), reverse=True),
             'Homologacja': lambda x: [str(i).strip().upper() for i in x.unique()],
-            'Miejsca dla kibiców': 'first'
-        }).reset_index()
+            'Miejsca dla kibiców': 'first',
+        }
+        if 'Ig' in self.hills_df.columns:
+            agg_dict['Ig'] = lambda x: any(str(v).strip().lower() in {"1", "tak", "+", "t", "yes"} for v in x)
+        df = self.hills_df.groupby(['Kraj', 'Miasto']).agg(agg_dict).reset_index()
 
         for _, row in df.iterrows():
             kraj, miasto = str(row['Kraj']), str(row['Miasto'])
@@ -2459,33 +2542,43 @@ class SeasonPlannerFrame(ttk.Frame):
             f_kraj = self.filter_kraj_var.get().strip().upper()
             if f_kraj and f_kraj != kraj.upper():
                 continue
-            
-            # --- KLUCZOWA ZMIANA: Globalne użycie miasta ---
-            # Zawsze pokazujemy faktyczną liczbę użyć skoczni (z WC, COC, GP itd.)
+
+            # --- Globalne użycie miasta ---
             uzycia_skoczni = live_usage.get(miasto, 0)
-            
-            # --- DODATKOWE BLOKADY KRAJOWE (GRUPY) ---
+
+            # --- Blokady krajowe (grupy) ---
             kraj_zablokowany = False
-            if cycle in junior_group:
+            if cycle_base in junior_group:
                 if junior_usage.get(kraj, 0) >= 2:
                     kraj_zablokowany = True
-            elif cycle in summer_group:
+            elif cycle_base in summer_group:
                 if summer_usage.get(kraj, 0) >= 2:
                     kraj_zablokowany = True
 
-            # --- FILTR UŻYCIA (Checkbox "Ukryj użyte") ---
-            # Ukrywamy jeśli: 
-            # 1. Skocznia osiągnęła limit sezonowy (2/2)
-            # 2. LUB kraj jest zablokowany przez zasadę grupową (Juniorzy/Lato)
+            # --- Filtr użycia ---
             if self.filter_usage_var.get():
                 if uzycia_skoczni >= 2 or kraj_zablokowany:
                     continue
 
-            # --- FILTRY WC CLASS / WIELKOŚĆ (Poprzednie poprawki) ---
-            if self.filter_wc_var.get():
+            # --- Filtr homologacji / klasy operacyjnej ---
+            if min_fis and _HILLS_TAB_AVAILABLE:
+                op_class = op_lookup.get((kraj.upper(), miasto), "Pełna")
+                eff_cls = self._get_effective_fis_class(row['Homologacja'], op_class)
+                eff_idx = fis_order.get(eff_cls, len(_FIS_CLASS_ORDER))
+                min_idx = fis_order.get(min_fis, len(_FIS_CLASS_ORDER))
+                if eff_idx > min_idx:  # efektywna klasa niższa niż wymagana
+                    continue
+            elif self.filter_wc_var.get():
+                # fallback: stary filtr WC CLASS
                 if not any('WORLD CUP' in h or 'OLYMPIC' in h for h in row['Homologacja']):
                     continue
-            
+
+            # --- Filtr igielitu (GP, SCOC) ---
+            if needs_igielit:
+                has_ig = bool(row.get('Ig', False))
+                if not has_ig:
+                    continue
+
             try:
                 hs_numbers = [float(str(h).replace(',', '.')) for h in hss]
                 if self.filter_normal_var.get() and not any(85 <= h < 110 for h in hs_numbers):
@@ -2494,16 +2587,14 @@ class SeasonPlannerFrame(ttk.Frame):
                     continue
             except: pass
 
-            # --- WSTAWIANIE DO TABELI ---
+            # --- Wstawianie do tabeli ---
             raw_t = str(row['Miejsca dla kibiców']).replace(" ", "")
             try: b_str = f"{int(float(raw_t)):,}".replace(",", " ")
             except: b_str = "0"
 
             hs_str = ", ".join(map(str, hss))
-            
-            # W kolumnie "Użycia" zawsze pokazujemy uzycia_skoczni, 
-            # żeby użytkownik wiedział, dlaczego nie może wybrać danej skoczni
-            self.tree_hosts.insert("", "end", text=f" {kraj}", 
+
+            self.tree_hosts.insert("", "end", text=f" {kraj}",
                                    image=self.main_app._get_flag_image(kraj),
                                    values=(miasto, hs_str, b_str, uzycia_skoczni))
 
