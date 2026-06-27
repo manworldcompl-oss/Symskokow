@@ -879,14 +879,65 @@ class AcademyFrame(ttk.Frame):
                 continue
         return out
 
+    def _load_ed_levels(self, tag: str) -> Dict[str, int]:
+        """Zwraca mapę {NAT: poziom_ED (0-5)} z Infrastruktura S<X>.csv."""
+        import re as _re
+
+        path_str = self.men_var.get() if tag == "MEN" else self.women_var.get()
+        m = _re.search(r"(S\d+)", str(path_str))
+        if not m:
+            return {}
+        season_tag = m.group(1)
+
+        candidates = [
+            Path(path_str).parent / f"Infrastruktura {season_tag}.csv",
+            APP_DIR / season_tag / f"Infrastruktura {season_tag}.csv",
+        ]
+        p = next((c for c in candidates if c.exists()), None)
+        if p is None:
+            return {}
+
+        try:
+            df = _read_csv_any(p)
+        except Exception:
+            return {}
+
+        df.columns = [str(c).strip() for c in df.columns]
+
+        nat_col = None
+        ed_col = None
+        for c in df.columns:
+            key = _norm_header(c)
+            if key in ("nat", "kraj", "country") and nat_col is None:
+                nat_col = c
+            if "centrumedukacyjne" in key.replace(" ", "") and ed_col is None:
+                ed_col = c
+            elif key == "ed" and ed_col is None:
+                ed_col = c
+
+        if nat_col is None or ed_col is None:
+            return {}
+
+        out: Dict[str, int] = {}
+        for _, row in df.iterrows():
+            nat = str(row[nat_col]).strip().upper()
+            try:
+                level = int(float(str(row[ed_col]).replace(",", ".")))
+                level = max(0, min(5, level))
+            except Exception:
+                level = 0
+            if nat and nat != "NAN":
+                out[nat] = level
+        return out
+
     def _advance_season(self, tag: str):
         """
         Rozwój zawodników Akademii na nowy sezon.
 
         Dla każdego zawodnika:
           wiek   = wiek + 1
-          UM     = UM + (UM_trenera_juniorów / 20 * Tempo) + RNG[0..2]
-          Forma  = Forma + (UM_trenera_juniorów / 20 * Tempo) + RNG[0..2]
+          UM     = UM + (UM_trenera_juniorów * (1 + poziom_ED * 0.1) / 20 * Tempo) + RNG[0..2]
+          Forma  = Forma + (UM_trenera_juniorów * (1 + poziom_ED * 0.1) / 20 * Tempo) + RNG[0..2]
           Tempo  = bez zmian
           Pot    = bez zmian
 
@@ -916,6 +967,8 @@ class AcademyFrame(ttk.Frame):
 
         # mapa {NAT: UM trenera juniorów}
         trainers = self._load_junior_trainers(tag)
+        # mapa {NAT: poziom centrum edukacyjnego (0-5)}
+        ed_levels = self._load_ed_levels(tag)
 
         # dopilnuj typów
         for col in ["Wiek", "UM", "Forma"]:
@@ -930,6 +983,7 @@ class AcademyFrame(ttk.Frame):
         for _, row in df.iterrows():
             nat = str(row.get("Kraj", "") or "").upper()
             trener_um = float(trainers.get(nat, 0.0) or 0.0)
+            ed_level = ed_levels.get(nat, 0)
 
             # wiek +1
             age = row.get("Wiek")
@@ -957,7 +1011,7 @@ class AcademyFrame(ttk.Frame):
                 tempo_raw = tempo_raw.replace(",", ".")
             tempo = _to_float(tempo_raw, 0.0)
 
-            base_gain = (trener_um / 20.0) * tempo
+            base_gain = (trener_um * (1 + ed_level * 0.1) / 20.0) * tempo
 
             rand_gain_um = rng.randint(0, 2)
             rand_gain_forma = rng.randint(0, 2)
@@ -1970,25 +2024,30 @@ class AcademyRootFrame(ttk.Frame):
 
             ttk.Button(btn_frame_e, text="Odśwież", command=self._load_logs_into_tables).pack(side=tk.LEFT, padx=2)
             ttk.Button(btn_frame_e, text="Generuj imiona", command=lambda s=sex: self._fix_names_in_csv(s)).pack(side=tk.LEFT, padx=2)
-            
-            # NOWY PRZYCISK
             ttk.Button(
-                btn_frame_e, 
-                text="Przenieś do bazy głównej", 
+                btn_frame_e,
+                text="Przenieś do bazy głównej",
                 command=lambda s=sex: self._export_to_main_database(s)
             ).pack(side=tk.LEFT, padx=2)
+            ttk.Button(
+                btn_frame_e,
+                text="↩ Wróć do Akademii",
+                command=lambda s=sex: self._move_back_to_academy("extracted", s)
+            ).pack(side=tk.LEFT, padx=(12, 2))
 
             # --- Zwolnieni ---
             frm_f = ttk.Frame(self.nb_fired)
             self.nb_fired.add(frm_f, text=label)
             self.tv_fired[sex] = self._build_simple_table(frm_f)
 
-            # Przycisk odświeżania pod tabelą Zwolnionych
+            btn_frame_f = ttk.Frame(frm_f)
+            btn_frame_f.grid(row=2, column=0, columnspan=2, pady=5, sticky="w")
+            ttk.Button(btn_frame_f, text="Odśwież z pliku", command=self._load_logs_into_tables).pack(side=tk.LEFT, padx=2)
             ttk.Button(
-                frm_f, 
-                text="Odśwież z pliku", 
-                command=self._load_logs_into_tables
-            ).grid(row=2, column=0, pady=5, sticky="w", padx=5)
+                btn_frame_f,
+                text="↩ Wróć do Akademii",
+                command=lambda s=sex: self._move_back_to_academy("fired", s)
+            ).pack(side=tk.LEFT, padx=(12, 2))
         # po zbudowaniu – wczytaj dane z CSV
         self._load_logs_into_tables()
 
@@ -2084,6 +2143,80 @@ class AcademyRootFrame(ttk.Frame):
                     img = None
         self._flag_cache[key] = img
         return img
+
+    def _move_back_to_academy(self, source: str, sex: str):
+        """
+        Przenosi zaznaczonych zawodników z logu (Wyciągnięci / Zwolnieni)
+        z powrotem do pliku Akademii M lub W.
+        source: "extracted" | "fired"
+        sex:    "M" | "W"
+        """
+        tv_dict = self.tv_extracted if source == "extracted" else self.tv_fired
+        tv = tv_dict.get(sex)
+        if tv is None:
+            return
+
+        sel = list(tv.selection())
+        if not sel:
+            messagebox.showinfo("Wróć do Akademii", "Nie zaznaczono żadnych zawodników.", parent=self)
+            return
+
+        # Kolumny w TV (values) odpowiadają kolumnom CSV
+        tv_cols = list(tv["columns"])  # ["Kraj", "Zawodnik", "Wiek", "UM", "Forma", "Tempo", "Pot"]
+        rows_to_move = [dict(zip(tv_cols, tv.item(iid, "values"))) for iid in sel]
+
+        # Ścieżki plików
+        log_path = (EXTRACTED_M_PATH if sex == "M" else EXTRACTED_W_PATH) if source == "extracted" \
+                   else (FIRED_M_PATH if sex == "M" else FIRED_W_PATH)
+        acad_path = Path(self.tab_list.men_var.get() if sex == "M" else self.tab_list.women_var.get())
+
+        # 1. Usuń zaznaczone wiersze z pliku logu
+        if log_path.exists():
+            try:
+                try:
+                    df_log = pd.read_csv(log_path, sep=";", dtype=str, encoding="utf-8-sig")
+                except Exception:
+                    df_log = pd.read_csv(log_path, sep=";", dtype=str, encoding="cp1250")
+                df_log_new = df_log.copy()
+                for row_dict in rows_to_move:
+                    mask = pd.Series(True, index=df_log_new.index)
+                    for col, val in row_dict.items():
+                        if col in df_log_new.columns:
+                            mask &= df_log_new[col].astype(str) == str(val)
+                    matched = df_log_new[mask]
+                    if not matched.empty:
+                        df_log_new = df_log_new.drop(matched.index[0])
+                df_log_new.reset_index(drop=True).to_csv(log_path, sep=";", encoding="utf-8-sig", index=False)
+            except Exception as e:
+                messagebox.showerror("Błąd", f"Nie można zaktualizować pliku logu:\n{e}", parent=self)
+                return
+
+        # 2. Dopisz do Akademii
+        df_add = pd.DataFrame(rows_to_move)
+        try:
+            if acad_path.exists():
+                try:
+                    df_acad = pd.read_csv(acad_path, sep=";", dtype=str, encoding="utf-8-sig")
+                except Exception:
+                    df_acad = pd.read_csv(acad_path, sep=";", dtype=str, encoding="cp1250")
+                df_acad_new = pd.concat([df_acad, df_add], ignore_index=True)
+            else:
+                df_acad_new = df_add
+            df_acad_new.to_csv(acad_path, sep=";", encoding="cp1250", index=False)
+        except Exception as e:
+            messagebox.showerror("Błąd", f"Nie można zapisać pliku Akademii:\n{e}", parent=self)
+            return
+
+        # 3. Usuń z TV i odśwież listę Akademii
+        for iid in sel:
+            tv.delete(iid)
+        self.tab_list._reload_tab("MEN" if sex == "M" else "WOMEN")
+
+        messagebox.showinfo(
+            "Wróć do Akademii",
+            f"Przeniesiono {len(rows_to_move)} zawodnik(ów) z powrotem do Akademii {sex}.",
+            parent=self,
+        )
 
     def _build_simple_table(self, parent: ttk.Frame) -> ttk.Treeview:
         """

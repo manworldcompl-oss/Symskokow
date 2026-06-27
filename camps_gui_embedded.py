@@ -219,6 +219,46 @@ class CampsModule(ttk.Frame):
         ttk.Button(btn_f, text="ZAPISZ I AKTUALIZUJ BAZĘ", command=self.update_main_database).pack(side=tk.RIGHT, padx=5, pady=5)
         ttk.Button(btn_f, text="ZAPISZ RAPORT OBOZU", command=self.save_camp_report).pack(side=tk.RIGHT, padx=5, pady=5)
 
+    def _load_zy_levels(self) -> dict:
+        import re as _re
+        p = Path(self.players_path)
+        m = _re.search(r"(S\d+)", str(p))
+        if not m:
+            return {}
+        season_tag = m.group(1)
+        candidates = [
+            p.parent / f"Infrastruktura {season_tag}.csv",
+            APP_DIR / season_tag / f"Infrastruktura {season_tag}.csv",
+        ]
+        infra_path = next((c for c in candidates if c.exists()), None)
+        if infra_path is None:
+            return {}
+        out: dict = {}
+        try:
+            for enc in ("utf-8-sig", "utf-8", "cp1250"):
+                try:
+                    df = pd.read_csv(infra_path, sep=None, engine="python", dtype=str, encoding=enc)
+                    break
+                except Exception:
+                    continue
+            else:
+                return {}
+            df.columns = [str(c).strip() for c in df.columns]
+            nat_c = next((c for c in df.columns if c.upper() in ("KRAJ", "NAT", "COUNTRY")), None)
+            zy_c  = next((c for c in df.columns if "YWIENIOW" in c.upper() or c.upper() == "ZY"), None)
+            if nat_c and zy_c:
+                for _, row in df.iterrows():
+                    nat = str(row[nat_c]).strip().upper()
+                    try:
+                        lv = max(0, min(5, int(float(str(row[zy_c]).replace(",", ".")))))
+                    except Exception:
+                        lv = 0
+                    if nat and nat != "NAN":
+                        out[nat] = lv
+        except Exception:
+            pass
+        return out
+
     def remove_from_camp(self):
         selected = self.tree_calc.selection()
         if not selected: return
@@ -230,6 +270,7 @@ class CampsModule(ttk.Frame):
         for i in self.tree_calc.get_children(): self.tree_calc.delete(i)
         self.selected_players_data.sort(key=lambda x: (x['Kraj'], x['Zawodnik']))
         kraj_counts = {}
+        zy_map = self._load_zy_levels()
 
         for i, p in enumerate(self.selected_players_data):
             kraj, sex, age = p['Kraj'], p['Płeć'], p['Wiek']
@@ -237,15 +278,17 @@ class CampsModule(ttk.Frame):
             lp2 = kraj_counts[kraj]
             c_name, c_kraj, umo, formao = CAMPS[0]
             l_um, l_f = random.randint(-3, 3), random.randint(-3, 3)
-            
+
             st_df = self.staff_m if sex == 'M' else self.staff_w
             coach_um = 20.0
             if not st_df.empty:
                 m = st_df[(st_df['NAT'].str.upper() == kraj) & (st_df['Code'].str.upper() == ('TJ' if age < 18 else 'TS'))]
                 if not m.empty: coach_um = float(m.iloc[0]['UM'])
 
-            uo = round(umo * (0.25 if sex=='M' else 0.2) + coach_um * (0.125 if sex=='M' else 0.1) + get_age_pts(age, UO_AGE_M if sex=='M' else UO_AGE_W) + l_um)
-            fo = round(formao * 0.3 + coach_um * 0.15 + get_age_pts(age, FO_AGE) + l_f)
+            zy_level = zy_map.get(kraj, 0)
+            eff_age = max(0, age - zy_level)
+            uo = round(umo * (0.25 if sex=='M' else 0.2) + coach_um * (0.125 if sex=='M' else 0.1) + get_age_pts(eff_age, UO_AGE_M if sex=='M' else UO_AGE_W) + l_um)
+            fo = round(formao * 0.3 + coach_um * 0.15 + get_age_pts(eff_age, FO_AGE) + l_f)
             
             p['UPO_FINAL'] = p['UM'] + uo
             p['FPO_FINAL'] = p['Forma'] + fo

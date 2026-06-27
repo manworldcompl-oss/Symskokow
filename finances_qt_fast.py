@@ -372,8 +372,9 @@ class MainWindow(QtWidgets.QMainWindow):
             col_main = next((c for c in self._df.columns if c.upper() == "KRAJ"), None)
 
             mapping = {
-                'Centrum Medyczne': 'Sz', 'Centrum Ekonomiczne': 'Ek', 
-                'Centrum Inżynieryjne': 'In', 'Centrum Edukacyjne': 'Ed'
+                'Centrum Medyczne': 'Sz', 'Centrum Ekonomiczne': 'Ek',
+                'Centrum Inżynieryjne': 'In', 'Centrum Edukacyjne': 'Ed',
+                'Centrum Żywieniowe': 'Zy',
             }
 
             df_infra_mapped = df_infra.rename(columns={col_infra: col_main}).rename(columns=mapping)
@@ -409,11 +410,15 @@ class MainWindow(QtWidgets.QMainWindow):
             ek = pd.to_numeric(self._df['Ek'], errors='coerce').fillna(0)
             in_val = pd.to_numeric(self._df['In'], errors='coerce').fillna(0)
             ed = pd.to_numeric(self._df['Ed'], errors='coerce').fillna(0)
-            
+            zy = pd.to_numeric(
+                self._df['Zy'] if 'Zy' in self._df.columns else 0,
+                errors='coerce'
+            ).fillna(0)
+
             sp_glowny = clean_money(self._df['Sp. Główny'])
             sp_tech = clean_money(self._df['Sp. Techniczny'])
 
-            cost_infra = (sz * 10000) + (ek * 10000) + (ek * 0.02 * (sp_glowny + sp_tech)) + (in_val * 20000) + (ed * 10000)
+            cost_infra = (sz * 10000) + (ek * 10000) + (ek * 0.02 * (sp_glowny + sp_tech)) + (in_val * 20000) + (ed * 10000) + (zy * 10000)
 
             # --- 3. ROZBUDOWA ---
             cost_expansion_series = pd.Series(0, index=self._df[col_main])
