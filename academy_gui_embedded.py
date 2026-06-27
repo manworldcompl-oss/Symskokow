@@ -661,9 +661,26 @@ class AcademyFrame(ttk.Frame):
             page.grid_rowconfigure(0, weight=1)
             page.grid_columnconfigure(0, weight=1)
 
+            tv.tag_configure("mark_14",   background="#FFB366")  # 14-latkowie
+            tv.tag_configure("mark_need", background="#CCFFCC")  # potrzebni do kadry
+            tv.tag_configure("mark_both", background="#FF9933")  # oboje
+
             st = _TabState(page, tv, vsb, hsb, pd.DataFrame(), [])
             self._tabs[tag] = st
             tv.bind("<Button-3>", lambda e, tag=tag, tv=tv: self._on_right_click(e, tag, tv))
+
+            btn_bar = ttk.Frame(page)
+            btn_bar.grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=3)
+            ttk.Button(
+                btn_bar,
+                text="Zaznacz kandydatów do kadry",
+                command=lambda t=tag: self._mark_promotion_candidates(t),
+            ).pack(side=tk.LEFT, padx=2)
+            ttk.Button(
+                btn_bar,
+                text="Wyczyść oznaczenia",
+                command=lambda t=tag: self._clear_marks(t),
+            ).pack(side=tk.LEFT, padx=2)
 
         # pierwsze wczytanie, nie płacz jeśli pliku brak
         self._reload_tab("MEN", initial=True)
@@ -1029,6 +1046,116 @@ class AcademyFrame(ttk.Frame):
                 values.append(v)
 
             tv.insert("", "end", text=nat, image=img, values=values)
+
+    # ---- zaznaczanie kandydatów do kadr ----
+
+    def _load_juniors_count(self, sex: str) -> dict:
+        """Zlicza {NAT: liczba_juniorów} z Juniorzy Sxx.csv dla danej płci (M lub W)."""
+        import re as _re
+        path_str = self.men_var.get() if sex == "M" else self.women_var.get()
+        m = _re.search(r"(S\d+)", str(path_str))
+        if not m:
+            return {}
+        season_tag = m.group(1)
+        base_dir = Path(path_str).parent
+        p = base_dir / f"Juniorzy {season_tag}.csv"
+        if not p.exists():
+            p = base_dir / f"Juniorzy_{season_tag}.csv"
+        if not p.exists():
+            return {}
+        try:
+            try:
+                df = pd.read_csv(p, sep=";", dtype=str, encoding="utf-8-sig")
+            except Exception:
+                df = pd.read_csv(p, sep=";", dtype=str, encoding="cp1250")
+        except Exception:
+            return {}
+        df.columns = [str(c).strip() for c in df.columns]
+        tours = [f"{t}-{sex}" for t in ("JC","MC","PC","QC","TC","AC","BC","DC")]
+        count: dict = {}
+        for col in tours:
+            if col not in df.columns:
+                continue
+            for v in df[col]:
+                nat = str(v).strip().upper()
+                if nat and nat != "NAN":
+                    count[nat] = count.get(nat, 0) + 1
+        return count
+
+    def _mark_promotion_candidates(self, tag: str):
+        """
+        Koloruje wiersze w zakładce MEN/WOMEN:
+        - pomarańczowe (#FFB366): 14-latkowie → zawsze do kadry
+        - zielone (#CCFFCC): top N per kraj wg UM+Forma → do uzupełnienia min. 4 juniorów w kadrze
+        - ciemno-pomarańczowe (#FF9933): oboje jednocześnie
+        """
+        st = self._tabs.get(tag)
+        if st is None or st.df is None or st.df.empty:
+            messagebox.showinfo("Kandydaci", "Brak danych w tabeli.", parent=self)
+            return
+        tv = st.tv
+        df = st.df.copy().reset_index(drop=True)
+        sex = "M" if tag == "MEN" else "W"
+        juniors_per_country = self._load_juniors_count(sex)
+
+        df["_wiek"] = pd.to_numeric(df.get("Wiek", pd.Series(dtype=float)), errors="coerce").fillna(0)
+        df["_sila"] = (
+            pd.to_numeric(df.get("UM",    pd.Series(dtype=float)), errors="coerce").fillna(0)
+            + pd.to_numeric(df.get("Forma", pd.Series(dtype=float)), errors="coerce").fillna(0)
+        )
+
+        idx_14   = set(df[df["_wiek"] == 14].index.tolist())
+        idx_need: set = set()
+
+        for kraj, grp in df.groupby("Kraj"):
+            cur = juniors_per_country.get(str(kraj).strip().upper(), 0)
+            needed = max(0, 4 - cur)
+            if needed > 0:
+                grp_sorted = grp.sort_values("_sila", ascending=False)
+                non14 = grp_sorted[~grp_sorted.index.isin(idx_14)]
+                idx_need.update(non14.head(needed).index.tolist())
+
+        mark_tags = {"mark_14", "mark_need", "mark_both"}
+        to_select = []
+        for pos, iid in enumerate(tv.get_children("")):
+            is14   = pos in idx_14
+            is_need = pos in idx_need
+            existing = [t for t in (tv.item(iid, "tags") or ()) if t not in mark_tags]
+            if is14 and is_need:
+                existing.append("mark_both")
+                to_select.append(iid)
+            elif is14:
+                existing.append("mark_14")
+                to_select.append(iid)
+            elif is_need:
+                existing.append("mark_need")
+                to_select.append(iid)
+            tv.item(iid, tags=tuple(existing))
+
+        tv.selection_set(to_select)
+
+        if not juniors_per_country:
+            note = "\n(Nie znaleziono pliku Juniorzy — zaznaczono tylko 14-latków)"
+        else:
+            note = ""
+        messagebox.showinfo(
+            f"Kandydaci do kadry — {tag}",
+            f"14-latków (pomarańczowe): {len(idx_14)}\n"
+            f"Potrzebnych do uzupełnienia min. 4 (zielone): {len(idx_need)}\n"
+            f"Łącznie do zaznaczenia: {len(to_select)}{note}",
+            parent=self,
+        )
+
+    def _clear_marks(self, tag: str):
+        st = self._tabs.get(tag)
+        if st is None:
+            return
+        tv = st.tv
+        mark_tags = {"mark_14", "mark_need", "mark_both"}
+        for iid in tv.get_children(""):
+            existing = [t for t in (tv.item(iid, "tags") or ()) if t not in mark_tags]
+            tv.item(iid, tags=tuple(existing))
+        tv.selection_remove(*tv.get_children(""))
 
     # ---- sortowanie ----
     def _sort_by(self, st: _TabState, col: str, descending: bool):
