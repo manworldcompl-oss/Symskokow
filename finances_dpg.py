@@ -584,7 +584,7 @@ def cb_infrastructure(sender, app_data):
         df_infra = read_csv_loose(infra_path)
         col_infra = next((c for c in df_infra.columns if c.upper() == "KRAJ"), None)
         col_main = next((c for c in state["df"].columns if c.upper() == "KRAJ"), None)
-        mapping = {'Centrum Medyczne':'Sz','Centrum Ekonomiczne':'Ek','Centrum Inżynieryjne':'In','Centrum Edukacyjne':'Ed'}
+        mapping = {'Centrum Medyczne':'Sz','Centrum Ekonomiczne':'Ek','Centrum Inżynieryjne':'In','Centrum Edukacyjne':'Ed','Centrum Żywieniowe':'Zy'}
         df_infra_mapped = df_infra.rename(columns={col_infra: col_main}).rename(columns=mapping)
         df_infra_mapped = df_infra_mapped.replace('-', '0')
         for col in mapping.values():
@@ -608,9 +608,10 @@ def cb_infrastructure(sender, app_data):
         ek  = pd.to_numeric(state["df"]['Ek'], errors='coerce').fillna(0)
         in_ = pd.to_numeric(state["df"]['In'], errors='coerce').fillna(0)
         ed  = pd.to_numeric(state["df"]['Ed'], errors='coerce').fillna(0)
+        zy  = pd.to_numeric(state["df"]['Zy'] if 'Zy' in state["df"].columns else 0, errors='coerce').fillna(0)
         sp_g = clean_money(state["df"]['Sp. Główny'])
         sp_t = clean_money(state["df"]['Sp. Techniczny'])
-        cost_infra = (sz*10000)+(ek*10000)+(ek*0.02*(sp_g+sp_t))+(in_*20000)+(ed*10000)
+        cost_infra = (sz*10000)+(ek*10000)+(ek*0.02*(sp_g+sp_t))+(in_*20000)+(ed*10000)+(zy*10000)
 
         cost_exp = pd.Series(0.0, index=state["df"].index)
         if expansion_path.exists():
