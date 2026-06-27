@@ -1060,8 +1060,7 @@ class AcademyFrame(ttk.Frame):
         if not m:
             return {}
         season_tag = m.group(1)
-        base_dir = Path(path_str).parent
-        p = base_dir / f"Zawodnicy {season_tag}gpt.csv"
+        p = APP_DIR / season_tag / f"Zawodnicy {season_tag}gpt.csv"
         if not p.exists():
             return {}
         try:
