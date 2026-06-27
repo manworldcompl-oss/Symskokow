@@ -3756,6 +3756,8 @@ class HillsTab(ttk.Frame):
                 widths.append(80)
             elif c == "Cena":
                 widths.append(110)
+            elif c.endswith("_old") or c.endswith("_new"):
+                widths.append(50)
             else:
                 widths.append(90)
 
