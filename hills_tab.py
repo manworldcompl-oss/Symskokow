@@ -98,6 +98,66 @@ _FIS_CLASS_ORDER = [
     "OLYMPIC CLASS", "WORLD CUP CLASS", "CONTINENTAL CUP CLASS", "JUNIOR CUP CLASS"
 ]
 
+# Mapowanie pól HOMOLOGATION_SPEC → kolumny CSV skoczni (po normalizacji)
+_HOMO_FIELD_COL = {
+    "Miejsca dla kibiców": "Miejsca dla kibiców",
+    "Oświetlenie":          "OŚ",
+    "Tablica wyników":      "Tw",
+    "Kabina komentatorska": "Kk",
+    "Kabina sędziowska":    "Ks",
+    "Poczekalnia dla zawodników": "Poc",
+    "Siatka wiatrochłonna": "Sia",
+    "Naśnieżanie":          "Naś",
+}
+
+
+def _homo_check_row(row, klass: str) -> list:
+    """Zwraca listę niespełnionych wymagań dla klasy. Pusta lista = spełnione."""
+    spec = HOMOLOGATION_SPEC.get(klass, {})
+    failures = []
+
+    def _v(col):
+        return str(row.get(col) or "").strip()
+
+    for field, req in spec.items():
+        if req == "-":
+            continue
+        col = _HOMO_FIELD_COL.get(field, field)
+        val = _v(col)
+
+        if field in ("Miejsca dla kibiców", "Oświetlenie"):
+            if _to_int_safe(val) < _to_int_safe(req):
+                failures.append(f"{field}: {val or '–'} (wym. {req})")
+        elif field == "Tablica wyników":
+            if _TW_SCORE.get(_norm_str(val), 0) < _TW_SCORE.get(_norm_str(req), 0):
+                failures.append(f"{field}: {val or '–'} (wym. {req})")
+        elif field == "Kabina komentatorska":
+            def _kk_num(s):
+                m = _re.search(r"(\d+)", s)
+                return int(m.group(1)) if m else 0
+            if _kk_num(val) < _kk_num(req):
+                failures.append(f"{field}: {val or '–'} (wym. {req})")
+        elif field in ("Kabina sędziowska", "Siatka wiatrochłonna"):
+            if val != "+":
+                failures.append(f"{field}: {val or '–'} (wym. +)")
+        elif field == "Poczekalnia dla zawodników":
+            if _POC_SCORE.get(_norm_str(val), 0) < _POC_SCORE.get(_norm_str(req), 0):
+                failures.append(f"{field}: {val or '–'} (wym. {req})")
+        elif field == "Naśnieżanie":
+            if _NAS_SCORE.get(val.lower(), 0) < _NAS_SCORE.get(req.lower(), 0):
+                failures.append(f"{field}: {val or '–'} (wym. {req})")
+
+    return failures
+
+
+def _homo_best_class(row) -> str:
+    """Zwraca najwyższą klasę FIS jaką spełnia wiersz skoczni."""
+    for klass in _FIS_CLASS_ORDER:
+        if not _homo_check_row(row, klass):
+            return klass
+    return "Brak klasy"
+
+
 def _effective_fis_class(actual: str, op_class: str) -> str:
     """Zwraca efektywną klasę FIS po uwzględnieniu klasy operacyjnej."""
     actual_up = actual.strip().upper()
@@ -2888,43 +2948,220 @@ class HillsTab(ttk.Frame):
         self._recalc_build_costs()
 
     def _build_homologations_tab(self, parent):
-        from tkinter import ttk
+        nb_sub = ttk.Notebook(parent)
+        nb_sub.pack(fill="both", expand=True)
 
-        root = ttk.Frame(parent)
+        # --- Zakładka 1: Wymagania (stary układ 2×2) ---
+        tab_req = ttk.Frame(nb_sub)
+        nb_sub.add(tab_req, text="Wymagania")
+
+        root = ttk.Frame(tab_req)
         root.pack(fill="both", expand=True, padx=10, pady=10)
-
-        # 2 kolumny, 2 wiersze – 2x2 layout
         for c in range(2):
             root.columnconfigure(c, weight=1)
         for r in range(2):
             root.rowconfigure(r, weight=1)
 
         classes = list(HOMOLOGATION_SPEC.items())
-
         for idx, (klass, spec) in enumerate(classes):
-            row = idx // 2   # 0,0,1,1
-            col = idx % 2    # 0,1,0,1
-
+            row = idx // 2
+            col = idx % 2
             box = ttk.Labelframe(root, text=klass)
-            box.grid(
-                row=row,
-                column=col,
-                sticky="nsew",
-                padx=5,
-                pady=5,
-                ipadx=4,
-                ipady=2,
-            )
+            box.grid(row=row, column=col, sticky="nsew", padx=5, pady=5, ipadx=4, ipady=2)
             box.columnconfigure(1, weight=1)
-
-            # Wiersze: parametr | wartość
             for r, (field, val) in enumerate(spec.items()):
-                ttk.Label(box, text=field + ":", anchor="w").grid(
-                    row=r, column=0, sticky="w", padx=(8, 4), pady=1
+                ttk.Label(box, text=field + ":", anchor="w").grid(row=r, column=0, sticky="w", padx=(8, 4), pady=1)
+                ttk.Label(box, text=str(val), anchor="w").grid(row=r, column=1, sticky="w", padx=(0, 8), pady=1)
+
+        # --- Zakładka 2: Sprawdzenie ---
+        tab_check = ttk.Frame(nb_sub)
+        nb_sub.add(tab_check, text="Sprawdzenie")
+
+        bar = ttk.Frame(tab_check)
+        bar.pack(fill="x", padx=8, pady=(8, 4))
+        ttk.Label(bar, text="Plik skoczni:").pack(side="left")
+        hills_var = getattr(self.hills_viewer, "var_path", tk.StringVar())
+        ttk.Entry(bar, textvariable=hills_var, width=50).pack(side="left", padx=4, fill="x", expand=True)
+        ttk.Button(bar, text="Sprawdź", command=self._homo_check_refresh).pack(side="left", padx=4)
+        ttk.Button(bar, text="Przypisz klasy i zapisz", command=self._homo_assign_classes).pack(side="left", padx=4)
+
+        self._homo_summary_var = tk.StringVar(value="")
+        ttk.Label(tab_check, textvariable=self._homo_summary_var, anchor="w").pack(
+            fill="x", padx=8, pady=(0, 4)
+        )
+
+        cols = ("Repr.", "Kraj", "Miasto", "Skocznia", "Homologacja", "Najlepsza klasa", "Status", "Uwagi")
+        frame_tv = ttk.Frame(tab_check)
+        frame_tv.pack(fill="both", expand=True, padx=8, pady=(0, 8))
+
+        tv = ttk.Treeview(frame_tv, columns=cols, show="headings", selectmode="browse")
+        for c in cols:
+            tv.heading(c, text=c)
+        tv.column("Repr.",          width=100, stretch=False)
+        tv.column("Kraj",           width=50,  stretch=False)
+        tv.column("Miasto",         width=90,  stretch=False)
+        tv.column("Skocznia",       width=150, stretch=False)
+        tv.column("Homologacja",    width=150, stretch=False)
+        tv.column("Najlepsza klasa",width=150, stretch=False)
+        tv.column("Status",         width=110, stretch=False)
+        tv.column("Uwagi",          width=300, stretch=True)
+
+        tv.tag_configure("ok",      foreground="#005500", background="#e8f5e9")
+        tv.tag_configure("fail",    foreground="#990000", background="#ffebee")
+        tv.tag_configure("upgrade", foreground="#7a4100", background="#fff8e1")
+
+        sb = ttk.Scrollbar(frame_tv, orient="vertical", command=tv.yview)
+        tv.configure(yscrollcommand=sb.set)
+        tv.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+
+        self._homo_tv = tv
+
+    def _load_hills_for_homo(self) -> "pd.DataFrame":
+        """Wczytuje CSV skoczni i zwraca DataFrame z normalizowanymi nagłówkami."""
+        import pandas as _pd2
+        path_str = getattr(self.hills_viewer, "var_path", tk.StringVar()).get().strip()
+        if not path_str:
+            return _pd2.DataFrame()
+        p = Path(path_str)
+        if not p.exists():
+            return _pd2.DataFrame()
+        df = None
+        for enc in ("utf-8-sig", "utf-8", "cp1250", "latin1"):
+            try:
+                df = _pd2.read_csv(p, sep=";", dtype=str, encoding=enc)
+                break
+            except Exception:
+                pass
+        if df is None or df.empty:
+            return _pd2.DataFrame()
+        want = {
+            "reprezentacja": "Reprezentacja", "kraj": "Kraj", "miasto": "Miasto",
+            "skocznia": "Skocznia", "k": "K", "hs": "HS", "stan": "Stan",
+            "homologacja": "Homologacja",
+            "miejscadlakibicow": "Miejsca dla kibiców", "os": "OŚ", "ig": "Ig",
+            "tw": "Tw", "kk": "Kk", "ks": "Ks", "poc": "Poc", "sia": "Sia", "nas": "Naś",
+        }
+        mapping = {}
+        for c in list(df.columns):
+            k = _canon_hdr(c)
+            if k in want and want[k] not in mapping.values():
+                mapping[c] = want[k]
+            else:
+                mapping[c] = c
+        df = df.rename(columns=mapping)
+        for col in want.values():
+            if col not in df.columns:
+                df[col] = ""
+        return df
+
+    def _homo_check_refresh(self):
+        """Wypełnia treeview statusem homologacji dla każdej skoczni."""
+        df = self._load_hills_for_homo()
+        if df is None or df.empty:
+            messagebox.showinfo("Info", "Brak danych skoczni. Sprawdź ścieżkę pliku.")
+            return
+
+        tv = self._homo_tv
+        for item in tv.get_children():
+            tv.delete(item)
+
+        ok_count = fail_count = upgrade_count = 0
+
+        for _, row in df.iterrows():
+            declared = str(row.get("Homologacja", "") or "").strip().upper()
+            best = _homo_best_class(row)
+
+            d_idx = next((i for i, c in enumerate(_FIS_CLASS_ORDER) if c == declared), 99)
+            b_idx = next((i for i, c in enumerate(_FIS_CLASS_ORDER) if c == best.upper()), 99)
+
+            if b_idx < d_idx:
+                status = "Możliwy awans"
+                tag = "upgrade"
+                uwagi = f"Kwalifikuje do: {best}"
+                upgrade_count += 1
+            elif b_idx > d_idx and d_idx < 99:
+                missing = _homo_check_row(row, _FIS_CLASS_ORDER[d_idx])
+                status = "Niezgodność"
+                tag = "fail"
+                uwagi = "; ".join(missing)
+                fail_count += 1
+            elif d_idx == 99 and b_idx == 99:
+                status = "Brak klasy"
+                tag = "fail"
+                uwagi = "Nie spełnia żadnej klasy"
+                fail_count += 1
+            else:
+                status = "OK"
+                tag = "ok"
+                uwagi = ""
+                ok_count += 1
+
+            tv.insert("", "end", values=(
+                str(row.get("Reprezentacja", "")),
+                str(row.get("Kraj", "")),
+                str(row.get("Miasto", "")),
+                str(row.get("Skocznia", "")),
+                str(row.get("Homologacja", "")),
+                best,
+                status,
+                uwagi,
+            ), tags=(tag,))
+
+        self._homo_summary_var.set(
+            f"Wyniki:  OK: {ok_count}  |  Niezgodność: {fail_count}  |  Możliwy awans: {upgrade_count}"
+        )
+
+    def _homo_assign_classes(self):
+        """Auto-przypisuje najlepszą klasę każdej skoczni i zapisuje do CSV."""
+        df = self._load_hills_for_homo()
+        if df is None or df.empty:
+            messagebox.showinfo("Info", "Brak danych skoczni.")
+            return
+
+        changes = 0
+        for idx, row in df.iterrows():
+            best = _homo_best_class(row)
+            old = str(row.get("Homologacja", "") or "").strip()
+            if best != old:
+                df.at[idx, "Homologacja"] = best
+                changes += 1
+
+        if changes == 0:
+            messagebox.showinfo("Info", "Wszystkie klasy homologacji są już poprawne. Brak zmian.")
+            return
+
+        if not messagebox.askyesno("Potwierdź", f"Zostaną zmienione klasy dla {changes} skoczni. Zapisać?"):
+            return
+
+        path_str = getattr(self.hills_viewer, "var_path", tk.StringVar()).get().strip()
+        p = Path(path_str)
+        try:
+            # Wczytaj oryginał, żeby zachować oryginalne kolumny
+            orig_df = None
+            for enc in ("utf-8-sig", "utf-8", "cp1250"):
+                try:
+                    orig_df = pd.read_csv(p, sep=";", dtype=str, encoding=enc)
+                    break
+                except Exception:
+                    pass
+            if orig_df is not None:
+                homo_col_orig = next(
+                    (c for c in orig_df.columns if _canon_hdr(c) == "homologacja"), None
                 )
-                ttk.Label(box, text=str(val), anchor="w").grid(
-                    row=r, column=1, sticky="w", padx=(0, 8), pady=1
-                )
+                if homo_col_orig:
+                    orig_df[homo_col_orig] = df["Homologacja"].values
+                    orig_df.to_csv(p, sep=";", index=False, encoding="utf-8")
+                else:
+                    df.to_csv(p, sep=";", index=False, encoding="utf-8")
+            else:
+                df.to_csv(p, sep=";", index=False, encoding="utf-8")
+
+            messagebox.showinfo("OK", f"Zapisano. Zmieniono klasy dla {changes} skoczni.")
+            self.hills_viewer.refresh()
+            self._homo_check_refresh()
+        except Exception as exc:
+            messagebox.showerror("Błąd zapisu", str(exc))
 
     # --- Zakładka: inwestycje w centra infrastruktury (ME/EK/IN/ED) ---
     def _build_infra_upgrade_tab(self, parent):
