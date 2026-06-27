@@ -3060,6 +3060,15 @@ class HillsTab(ttk.Frame):
         for col in want.values():
             if col not in df.columns:
                 df[col] = ""
+        # Normalizuj stare nazwy klas (S50: "CONTINENTAL CLASS" → "CONTINENTAL CUP CLASS")
+        _cls_fix = {
+            "CONTINENTAL CLASS": "CONTINENTAL CUP CLASS",
+            "JUNIOR CLASS":      "JUNIOR CUP CLASS",
+        }
+        if "Homologacja" in df.columns:
+            df["Homologacja"] = df["Homologacja"].map(
+                lambda v: _cls_fix.get(str(v).strip().upper(), str(v).strip()) if v else v
+            )
         return df
 
     def _homo_check_refresh(self):
