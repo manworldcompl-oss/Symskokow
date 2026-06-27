@@ -581,6 +581,13 @@ def cb_infrastructure(sender, app_data):
         show_error("Błąd", f"Nie znaleziono:\n{infra_path.name}"); return
     try:
         original_columns = list(state["df"].columns)
+        # Dodaj Zy za Ed jeśli jeszcze nie istnieje
+        if 'Zy' not in original_columns:
+            if 'Ed' in original_columns:
+                original_columns.insert(original_columns.index('Ed') + 1, 'Zy')
+            else:
+                original_columns.append('Zy')
+            state["df"]['Zy'] = 0
         df_infra = read_csv_loose(infra_path)
         col_infra = next((c for c in df_infra.columns if c.upper() == "KRAJ"), None)
         col_main = next((c for c in state["df"].columns if c.upper() == "KRAJ"), None)
