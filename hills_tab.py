@@ -1669,7 +1669,7 @@ class CsvViewer(ttk.Frame):
     def _read_csv(self, path: Path) -> pd.DataFrame:
         if not path or not Path(path).exists():
             return pd.DataFrame()
-        for args in ({}, {"sep":";"}, {"sep":";","encoding":"cp1250"}):
+        for args in ({}, {"sep":";"}, {"sep":";","encoding":"cp1250"}, {"sep":";","encoding":"latin1"}):
             try:
                 return pd.read_csv(path, **args)
             except Exception:
@@ -1870,7 +1870,7 @@ class InfraCanvasGrid(ttk.Frame):
 
     def _read_csv(self, path: Path) -> pd.DataFrame:
         if not path or not Path(path).exists(): return pd.DataFrame()
-        for args in ({}, {"sep":";"}, {"sep":";","encoding":"cp1250"}):
+        for args in ({}, {"sep":";"}, {"sep":";","encoding":"cp1250"}, {"sep":";","encoding":"latin1"}):
             try:
                 return pd.read_csv(path, **args)
             except Exception:
@@ -2463,7 +2463,14 @@ class HillsTab(ttk.Frame):
                 for _, r in df_src.iterrows():
                     kraj = str(r.get("Kraj", "") or "").upper()
                     img = _get_flag_cached(kraj)
-                    values = [r.get(c, "") for c in cols]
+                    values = []
+                    for c in cols:
+                        v = r.get(c, "")
+                        try:
+                            safe = "" if pd.isna(v) else str(v)
+                        except (TypeError, ValueError):
+                            safe = "" if v is None else str(v)
+                        values.append(safe)
                     tv.insert("", "end", text=kraj, image=img, values=values)
 
         nb.add(tab_c, text="Kompleksy")
