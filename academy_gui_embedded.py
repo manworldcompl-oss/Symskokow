@@ -1118,6 +1118,8 @@ class AcademyFrame(ttk.Frame):
             + pd.to_numeric(df.get("Forma", pd.Series(dtype=float)), errors="coerce").fillna(0)
         )
 
+        # 12 i 13 latków pomijamy całkowicie
+        idx_skip = set(df[df["_wiek"].isin([12, 13])].index.tolist())
         idx_14   = set(df[df["_wiek"] == 14].index.tolist())
         idx_need: set = set()
 
@@ -1125,9 +1127,10 @@ class AcademyFrame(ttk.Frame):
             cur = juniors_per_country.get(str(kraj).strip().upper(), 0)
             needed = max(0, 4 - cur)
             if needed > 0:
-                grp_sorted = grp.sort_values("_sila", ascending=False)
-                non14 = grp_sorted[~grp_sorted.index.isin(idx_14)]
-                idx_need.update(non14.head(needed).index.tolist())
+                # tylko zawodnicy ≥15 lat (nie 12/13 i nie 14-latkowie, ci już oznaczeni)
+                eligible = grp[~grp.index.isin(idx_skip | idx_14)]
+                grp_sorted = eligible.sort_values("_sila", ascending=False)
+                idx_need.update(grp_sorted.head(needed).index.tolist())
 
         mark_tags = {"mark_14", "mark_need", "mark_both"}
         to_select = []
@@ -1154,9 +1157,10 @@ class AcademyFrame(ttk.Frame):
             note = ""
         messagebox.showinfo(
             f"Kandydaci do kadry — {tag}",
-            f"14-latków (pomarańczowe): {len(idx_14)}\n"
-            f"Potrzebnych do uzupełnienia min. 4 (zielone): {len(idx_need)}\n"
-            f"Łącznie do zaznaczenia: {len(to_select)}{note}",
+            f"14-latków (pomarańczowe, zawsze): {len(idx_14)}\n"
+            f"Najlepszych ≥15 lat do uzupełnienia min. 4 (zielone): {len(idx_need)}\n"
+            f"Pominiętych 12–13 lat: {len(idx_skip)}\n"
+            f"Łącznie zaznaczonych: {len(to_select)}{note}",
             parent=self,
         )
 
