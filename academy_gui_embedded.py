@@ -879,14 +879,65 @@ class AcademyFrame(ttk.Frame):
                 continue
         return out
 
+    def _load_ed_levels(self, tag: str) -> Dict[str, int]:
+        """Zwraca mapę {NAT: poziom_ED (0-5)} z Infrastruktura S<X>.csv."""
+        import re as _re
+
+        path_str = self.men_var.get() if tag == "MEN" else self.women_var.get()
+        m = _re.search(r"(S\d+)", str(path_str))
+        if not m:
+            return {}
+        season_tag = m.group(1)
+
+        candidates = [
+            Path(path_str).parent / f"Infrastruktura {season_tag}.csv",
+            APP_DIR / season_tag / f"Infrastruktura {season_tag}.csv",
+        ]
+        p = next((c for c in candidates if c.exists()), None)
+        if p is None:
+            return {}
+
+        try:
+            df = _read_csv_any(p)
+        except Exception:
+            return {}
+
+        df.columns = [str(c).strip() for c in df.columns]
+
+        nat_col = None
+        ed_col = None
+        for c in df.columns:
+            key = _norm_header(c)
+            if key in ("nat", "kraj", "country") and nat_col is None:
+                nat_col = c
+            if "centrumedukacyjne" in key.replace(" ", "") and ed_col is None:
+                ed_col = c
+            elif key == "ed" and ed_col is None:
+                ed_col = c
+
+        if nat_col is None or ed_col is None:
+            return {}
+
+        out: Dict[str, int] = {}
+        for _, row in df.iterrows():
+            nat = str(row[nat_col]).strip().upper()
+            try:
+                level = int(float(str(row[ed_col]).replace(",", ".")))
+                level = max(0, min(5, level))
+            except Exception:
+                level = 0
+            if nat and nat != "NAN":
+                out[nat] = level
+        return out
+
     def _advance_season(self, tag: str):
         """
         Rozwój zawodników Akademii na nowy sezon.
 
         Dla każdego zawodnika:
           wiek   = wiek + 1
-          UM     = UM + (UM_trenera_juniorów / 20 * Tempo) + RNG[0..2]
-          Forma  = Forma + (UM_trenera_juniorów / 20 * Tempo) + RNG[0..2]
+          UM     = UM + (UM_trenera_juniorów * (1 + poziom_ED * 0.1) / 20 * Tempo) + RNG[0..2]
+          Forma  = Forma + (UM_trenera_juniorów * (1 + poziom_ED * 0.1) / 20 * Tempo) + RNG[0..2]
           Tempo  = bez zmian
           Pot    = bez zmian
 
@@ -916,6 +967,8 @@ class AcademyFrame(ttk.Frame):
 
         # mapa {NAT: UM trenera juniorów}
         trainers = self._load_junior_trainers(tag)
+        # mapa {NAT: poziom centrum edukacyjnego (0-5)}
+        ed_levels = self._load_ed_levels(tag)
 
         # dopilnuj typów
         for col in ["Wiek", "UM", "Forma"]:
@@ -930,6 +983,7 @@ class AcademyFrame(ttk.Frame):
         for _, row in df.iterrows():
             nat = str(row.get("Kraj", "") or "").upper()
             trener_um = float(trainers.get(nat, 0.0) or 0.0)
+            ed_level = ed_levels.get(nat, 0)
 
             # wiek +1
             age = row.get("Wiek")
@@ -957,7 +1011,7 @@ class AcademyFrame(ttk.Frame):
                 tempo_raw = tempo_raw.replace(",", ".")
             tempo = _to_float(tempo_raw, 0.0)
 
-            base_gain = (trener_um / 20.0) * tempo
+            base_gain = (trener_um * (1 + ed_level * 0.1) / 20.0) * tempo
 
             rand_gain_um = rng.randint(0, 2)
             rand_gain_forma = rng.randint(0, 2)
