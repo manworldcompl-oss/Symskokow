@@ -1060,14 +1060,24 @@ class AcademyFrame(ttk.Frame):
         if not m:
             return {}
         season_tag = m.group(1)
-        p = APP_DIR / season_tag / f"Zawodnicy {season_tag}gpt.csv"
-        if not p.exists():
+        # Szukaj w tym samym folderze co plik Akademii, potem fallback do APP_DIR
+        candidates = [
+            Path(path_str).parent / f"Zawodnicy {season_tag}gpt.csv",
+            APP_DIR / season_tag / f"Zawodnicy {season_tag}gpt.csv",
+        ]
+        p = next((c for c in candidates if c.exists()), None)
+        if p is None:
             return {}
         try:
-            try:
-                df = pd.read_csv(p, sep=";", dtype=str, encoding="utf-8-sig")
-            except Exception:
-                df = pd.read_csv(p, sep=";", dtype=str, encoding="cp1250")
+            for enc in ("utf-8-sig", "utf-8", "cp1250"):
+                try:
+                    # plik może używać przecinków lub średników
+                    df = pd.read_csv(p, sep=None, engine="python", dtype=str, encoding=enc)
+                    break
+                except Exception:
+                    continue
+            else:
+                return {}
         except Exception:
             return {}
         df.columns = [str(c).strip() for c in df.columns]
