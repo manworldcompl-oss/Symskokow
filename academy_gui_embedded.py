@@ -1050,7 +1050,10 @@ class AcademyFrame(ttk.Frame):
     # ---- zaznaczanie kandydatów do kadr ----
 
     def _load_juniors_count(self, sex: str) -> dict:
-        """Zlicza {NAT: liczba_juniorów} z Juniorzy Sxx.csv dla danej płci (M lub W)."""
+        """
+        Zlicza {NAT: liczba zawodników <15 lat} z Zawodnicy S<X>gpt.csv
+        dla danej płci (M lub W).
+        """
         import re as _re
         path_str = self.men_var.get() if sex == "M" else self.women_var.get()
         m = _re.search(r"(S\d+)", str(path_str))
@@ -1058,9 +1061,7 @@ class AcademyFrame(ttk.Frame):
             return {}
         season_tag = m.group(1)
         base_dir = Path(path_str).parent
-        p = base_dir / f"Juniorzy {season_tag}.csv"
-        if not p.exists():
-            p = base_dir / f"Juniorzy_{season_tag}.csv"
+        p = base_dir / f"Zawodnicy {season_tag}gpt.csv"
         if not p.exists():
             return {}
         try:
@@ -1071,15 +1072,28 @@ class AcademyFrame(ttk.Frame):
         except Exception:
             return {}
         df.columns = [str(c).strip() for c in df.columns]
-        tours = [f"{t}-{sex}" for t in ("JC","MC","PC","QC","TC","AC","BC","DC")]
+        # normalizuj nazwy kolumn
+        rename = {}
+        for c in df.columns:
+            lc = c.lower().replace(" ", "").replace("/", "")
+            if lc in ("kraj", "country", "nat"):
+                rename[c] = "Kraj"
+            elif lc in ("płeć", "plec", "sex", "gender"):
+                rename[c] = "Płeć"
+            elif lc in ("wiek", "age"):
+                rename[c] = "Wiek"
+        df = df.rename(columns=rename)
+        if "Kraj" not in df.columns or "Wiek" not in df.columns:
+            return {}
+        df["Wiek"] = pd.to_numeric(df["Wiek"], errors="coerce")
+        # filtr: odpowiednia płeć (jeśli kolumna istnieje) i wiek < 15
+        if "Płeć" in df.columns:
+            df = df[df["Płeć"].astype(str).str.strip().str.upper() == sex]
+        df = df[df["Wiek"] < 15]
         count: dict = {}
-        for col in tours:
-            if col not in df.columns:
-                continue
-            for v in df[col]:
-                nat = str(v).strip().upper()
-                if nat and nat != "NAN":
-                    count[nat] = count.get(nat, 0) + 1
+        for nat in df["Kraj"].astype(str).str.strip().str.upper():
+            if nat and nat != "NAN":
+                count[nat] = count.get(nat, 0) + 1
         return count
 
     def _mark_promotion_candidates(self, tag: str):
@@ -1135,7 +1149,7 @@ class AcademyFrame(ttk.Frame):
         tv.selection_set(to_select)
 
         if not juniors_per_country:
-            note = "\n(Nie znaleziono pliku Juniorzy — zaznaczono tylko 14-latków)"
+            note = "\n(Nie znaleziono pliku Zawodnicy gpt — zaznaczono tylko 14-latków)"
         else:
             note = ""
         messagebox.showinfo(
