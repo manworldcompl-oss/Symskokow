@@ -2685,7 +2685,8 @@ class HillsTab(ttk.Frame):
                                values=["Kraje — suma",
                                        "Kraje — rozbicie",
                                        "Kraje — suma + liczba",
-                                       "Ranking"])
+                                       "Ranking",
+                                       "Po klasie operacyjnej"])
         view_cb.pack(side="left", padx=(0,8), pady=6)
 
         ttk.Button(top_costs, text="Przelicz z pliku", command=lambda: _rebuild_costs()).pack(side="left", padx=6, pady=6)
@@ -2814,11 +2815,48 @@ class HillsTab(ttk.Frame):
                 df = _fmt_eur(_cache["by_count"].copy(), ["Suma"])
                 _tree_simple(table_wrap, df, cols=["Kraj","Liczba obiektów","Suma"], with_flags=True)
 
-            else:  # Ranking
+            elif mode == "Ranking":
                 df = _cache["ranking"].copy()
                 df["Udział %"] = df["Udział %"].map(lambda x: f"{x:.2f}%")
                 df = _fmt_eur(df, ["Suma"])
                 _tree_simple(table_wrap, df, cols=["Kraj","Suma","Udział %"], stretch_last=True, with_flags=True)
+
+            else:  # Po klasie operacyjnej
+                df_rows_src = _cache["df_rows"]
+                if df_rows_src is None or df_rows_src.empty:
+                    return
+                op_path = getattr(self, "_op_class_path", "")
+                df_op = load_operational_classes(op_path)
+                op_lookup: dict = {}
+                if not df_op.empty and {"Kraj", "Miasto", "Klasa"}.issubset(df_op.columns):
+                    for _, r in df_op.iterrows():
+                        op_lookup[(str(r["Kraj"]).strip().upper(), str(r["Miasto"]).strip())] = str(r["Klasa"]).strip()
+                rows_out = []
+                for _, r in df_rows_src.iterrows():
+                    nat = str(r.get("Kraj", "")).strip()
+                    miasto = str(r.get("Miasto", "")).strip()
+                    klasa = op_lookup.get((nat.upper(), miasto), "Pełna")
+                    mult = _OP_MULTIPLIERS.get(klasa, 1.0)
+                    full = float(r["Suma"])
+                    eff = full * mult
+                    sav = full - eff
+                    rows_out.append({"Kraj": nat, "Miasto": miasto, "Klasa op.": klasa,
+                                     "Pełny (€)": full, "Efektywny (€)": eff, "Oszczędność (€)": sav})
+                df_view = pd.DataFrame(rows_out)
+                df_view = _fmt_eur(df_view, ["Pełny (€)", "Efektywny (€)", "Oszczędność (€)"])
+                cols_op = ["Kraj", "Miasto", "Klasa op.", "Pełny (€)", "Efektywny (€)", "Oszczędność (€)"]
+                tv = _tree_simple(table_wrap, df_view, cols=cols_op, with_flags=True)
+                tv.tag_configure("pol", foreground="#B8860B")
+                tv.tag_configure("min", foreground="#CC0000")
+                # with_flags + Kraj as #0 → values = (Miasto, Klasa op., ...)
+                for iid in tv.get_children():
+                    vals = tv.item(iid, "values")
+                    if len(vals) >= 2:
+                        klasa_val = vals[1]
+                        if klasa_val == "Minimalna":
+                            tv.item(iid, tags=("min",))
+                        elif klasa_val == "Połowiczna":
+                            tv.item(iid, tags=("pol",))
 
         def _rebuild_costs():
             # wymuś przeliczenie od zera i odśwież render
