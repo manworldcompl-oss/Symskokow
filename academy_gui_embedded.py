@@ -1970,25 +1970,30 @@ class AcademyRootFrame(ttk.Frame):
 
             ttk.Button(btn_frame_e, text="Odśwież", command=self._load_logs_into_tables).pack(side=tk.LEFT, padx=2)
             ttk.Button(btn_frame_e, text="Generuj imiona", command=lambda s=sex: self._fix_names_in_csv(s)).pack(side=tk.LEFT, padx=2)
-            
-            # NOWY PRZYCISK
             ttk.Button(
-                btn_frame_e, 
-                text="Przenieś do bazy głównej", 
+                btn_frame_e,
+                text="Przenieś do bazy głównej",
                 command=lambda s=sex: self._export_to_main_database(s)
             ).pack(side=tk.LEFT, padx=2)
+            ttk.Button(
+                btn_frame_e,
+                text="↩ Wróć do Akademii",
+                command=lambda s=sex: self._move_back_to_academy("extracted", s)
+            ).pack(side=tk.LEFT, padx=(12, 2))
 
             # --- Zwolnieni ---
             frm_f = ttk.Frame(self.nb_fired)
             self.nb_fired.add(frm_f, text=label)
             self.tv_fired[sex] = self._build_simple_table(frm_f)
 
-            # Przycisk odświeżania pod tabelą Zwolnionych
+            btn_frame_f = ttk.Frame(frm_f)
+            btn_frame_f.grid(row=2, column=0, columnspan=2, pady=5, sticky="w")
+            ttk.Button(btn_frame_f, text="Odśwież z pliku", command=self._load_logs_into_tables).pack(side=tk.LEFT, padx=2)
             ttk.Button(
-                frm_f, 
-                text="Odśwież z pliku", 
-                command=self._load_logs_into_tables
-            ).grid(row=2, column=0, pady=5, sticky="w", padx=5)
+                btn_frame_f,
+                text="↩ Wróć do Akademii",
+                command=lambda s=sex: self._move_back_to_academy("fired", s)
+            ).pack(side=tk.LEFT, padx=(12, 2))
         # po zbudowaniu – wczytaj dane z CSV
         self._load_logs_into_tables()
 
@@ -2084,6 +2089,80 @@ class AcademyRootFrame(ttk.Frame):
                     img = None
         self._flag_cache[key] = img
         return img
+
+    def _move_back_to_academy(self, source: str, sex: str):
+        """
+        Przenosi zaznaczonych zawodników z logu (Wyciągnięci / Zwolnieni)
+        z powrotem do pliku Akademii M lub W.
+        source: "extracted" | "fired"
+        sex:    "M" | "W"
+        """
+        tv_dict = self.tv_extracted if source == "extracted" else self.tv_fired
+        tv = tv_dict.get(sex)
+        if tv is None:
+            return
+
+        sel = list(tv.selection())
+        if not sel:
+            messagebox.showinfo("Wróć do Akademii", "Nie zaznaczono żadnych zawodników.", parent=self)
+            return
+
+        # Kolumny w TV (values) odpowiadają kolumnom CSV
+        tv_cols = list(tv["columns"])  # ["Kraj", "Zawodnik", "Wiek", "UM", "Forma", "Tempo", "Pot"]
+        rows_to_move = [dict(zip(tv_cols, tv.item(iid, "values"))) for iid in sel]
+
+        # Ścieżki plików
+        log_path = (EXTRACTED_M_PATH if sex == "M" else EXTRACTED_W_PATH) if source == "extracted" \
+                   else (FIRED_M_PATH if sex == "M" else FIRED_W_PATH)
+        acad_path = Path(self.tab_list.men_var.get() if sex == "M" else self.tab_list.women_var.get())
+
+        # 1. Usuń zaznaczone wiersze z pliku logu
+        if log_path.exists():
+            try:
+                try:
+                    df_log = pd.read_csv(log_path, sep=";", dtype=str, encoding="utf-8-sig")
+                except Exception:
+                    df_log = pd.read_csv(log_path, sep=";", dtype=str, encoding="cp1250")
+                df_log_new = df_log.copy()
+                for row_dict in rows_to_move:
+                    mask = pd.Series(True, index=df_log_new.index)
+                    for col, val in row_dict.items():
+                        if col in df_log_new.columns:
+                            mask &= df_log_new[col].astype(str) == str(val)
+                    matched = df_log_new[mask]
+                    if not matched.empty:
+                        df_log_new = df_log_new.drop(matched.index[0])
+                df_log_new.reset_index(drop=True).to_csv(log_path, sep=";", encoding="utf-8-sig", index=False)
+            except Exception as e:
+                messagebox.showerror("Błąd", f"Nie można zaktualizować pliku logu:\n{e}", parent=self)
+                return
+
+        # 2. Dopisz do Akademii
+        df_add = pd.DataFrame(rows_to_move)
+        try:
+            if acad_path.exists():
+                try:
+                    df_acad = pd.read_csv(acad_path, sep=";", dtype=str, encoding="utf-8-sig")
+                except Exception:
+                    df_acad = pd.read_csv(acad_path, sep=";", dtype=str, encoding="cp1250")
+                df_acad_new = pd.concat([df_acad, df_add], ignore_index=True)
+            else:
+                df_acad_new = df_add
+            df_acad_new.to_csv(acad_path, sep=";", encoding="cp1250", index=False)
+        except Exception as e:
+            messagebox.showerror("Błąd", f"Nie można zapisać pliku Akademii:\n{e}", parent=self)
+            return
+
+        # 3. Usuń z TV i odśwież listę Akademii
+        for iid in sel:
+            tv.delete(iid)
+        self.tab_list._reload_tab("MEN" if sex == "M" else "WOMEN")
+
+        messagebox.showinfo(
+            "Wróć do Akademii",
+            f"Przeniesiono {len(rows_to_move)} zawodnik(ów) z powrotem do Akademii {sex}.",
+            parent=self,
+        )
 
     def _build_simple_table(self, parent: ttk.Frame) -> ttk.Treeview:
         """
