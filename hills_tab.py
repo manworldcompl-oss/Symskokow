@@ -2414,9 +2414,9 @@ class HillsTab(ttk.Frame):
         self.infra_viewer = InfraCanvasGrid(tab_i, "Plik infrastruktury (CSV):", default_infra, flags_dir)
         self.infra_viewer.pack(fill="both", expand=True)
 
-        # Zakładka inwestycji w centra (ME/EK/IN/ED)
+        # Zakładka inwestycji w centra (ME/EK/IN/ED/ZY)
         tab_centers = ttk.Frame(nb, name="infra_centers")
-        nb.add(tab_centers, text="Centra ME/EK/IN/ED")
+        nb.add(tab_centers, text="Centra ME/EK/IN/ED/ŻY")
         self._build_infra_upgrade_tab(tab_centers)
 
         # Homologacje – warunki minimalne klas
@@ -3446,13 +3446,14 @@ class HillsTab(ttk.Frame):
         rep_col = name_col or nat_col
         country_col = nat_col if nat_col != rep_col else None
 
-        # --- mapowanie ME/EK/IN/ED na konkretne kolumny z pliku ---
-        keys = ["ME", "EK", "IN", "ED"]
+        # --- mapowanie ME/EK/IN/ED/ZY na konkretne kolumny z pliku ---
+        keys = ["ME", "EK", "IN", "ED", "ZY"]
         name_map = {
             "ME": "CENTRUM MEDYCZNE",
             "EK": "CENTRUM EKONOMICZNE",
             "IN": "CENTRUM INŻYNIERYJNE",
             "ED": "CENTRUM EDUKACYJNE",
+            "ZY": "CENTRUM ŻYWIENIOWE",
         }
 
         center_cols: dict[str, str] = {}
@@ -3874,7 +3875,7 @@ class HillsTab(ttk.Frame):
         infra_path = Path(infra_path)
         out_path = infra_path.with_name("Rozbudowa Infrastruktury S51.csv")
 
-        LOG_HEADERS = ["TS", "Reprezentacja", "Kraj", "Stan", "ME", "EK", "IN", "ED", "Cena"]
+        LOG_HEADERS = ["TS", "Reprezentacja", "Kraj", "Stan", "ME", "EK", "IN", "ED", "ZY", "Cena"]
         new_file = not out_path.exists() or out_path.stat().st_size == 0
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -3923,6 +3924,7 @@ class HillsTab(ttk.Frame):
                 levels_old.get("EK", 0),
                 levels_old.get("IN", 0),
                 levels_old.get("ED", 0),
+                levels_old.get("ZY", 0),
                 0,          # cena tylko w wierszu PO
             ])
 
@@ -3936,6 +3938,7 @@ class HillsTab(ttk.Frame):
                 levels_new.get("EK", 0),
                 levels_new.get("IN", 0),
                 levels_new.get("ED", 0),
+                levels_new.get("ZY", 0),
                 cost,
             ])
 
