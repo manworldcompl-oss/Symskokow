@@ -2503,6 +2503,11 @@ class HillsTab(ttk.Frame):
         nb.add(tab_homo, text="Homologacje")
         self._build_homologations_tab(tab_homo)
 
+        # --- Cennik (informacyjna tabela stawek) ---
+        tab_cennik = ttk.Frame(nb, name="cennik")
+        nb.add(tab_cennik, text="Cennik")
+        self._build_cennik_tab(tab_cennik)
+
         # --- Koszty budowy / rozbudowy (Rozbudowa S51.csv) ---
         tab_build_costs = ttk.Frame(nb, name="koszty_budowy")
         nb.add(tab_build_costs, text="Koszty budowy")
@@ -3190,6 +3195,216 @@ class HillsTab(ttk.Frame):
             self._homo_check_refresh()
         except Exception as exc:
             messagebox.showerror("Błąd zapisu", str(exc))
+
+    # --- Zakładka: Cennik (informacyjna tabela kosztów) ---
+    def _build_cennik_tab(self, parent):
+        import tkinter as tk
+        from tkinter import ttk
+
+        canvas = tk.Canvas(parent, highlightthickness=0)
+        vsb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=vsb.set)
+        vsb.pack(side="right", fill="y")
+        canvas.pack(side="left", fill="both", expand=True)
+        inner = ttk.Frame(canvas)
+        win_id = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def _on_resize(event):
+            canvas.itemconfig(win_id, width=event.width)
+        canvas.bind("<Configure>", _on_resize)
+
+        def _on_frame_configure(event):
+            canvas.configure(scrollregion=canvas.bbox("all"))
+        inner.bind("<Configure>", _on_frame_configure)
+
+        def _bind_wheel(widget):
+            def _wheel(e):
+                canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+            def _wheel_up(e):   canvas.yview_scroll(-1, "units")
+            def _wheel_down(e): canvas.yview_scroll(1, "units")
+            widget.bind("<MouseWheel>", _wheel)
+            widget.bind("<Button-4>",   _wheel_up)
+            widget.bind("<Button-5>",   _wheel_down)
+            for child in widget.winfo_children():
+                _bind_wheel(child)
+        inner.bind("<MouseWheel>", lambda e: canvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+
+        PAD = dict(padx=14, pady=3)
+        HDR_BG = "#2d5fa6"
+        HDR_FG = "white"
+        SEC_BG = "#dce8fc"
+        ALT_BG = "#f2f6fc"
+
+        def _section(text):
+            f = tk.Frame(inner, bg=HDR_BG)
+            f.pack(fill="x", pady=(14, 0))
+            tk.Label(f, text=text, bg=HDR_BG, fg=HDR_FG,
+                     font=("TkDefaultFont", 10, "bold"),
+                     anchor="w", padx=10, pady=4).pack(fill="x")
+
+        def _table(parent_frame, headers, rows, col_widths=None):
+            tf = tk.Frame(parent_frame, bg="white", bd=1, relief="flat")
+            tf.pack(fill="x", padx=14, pady=4)
+
+            hdr_font = ("TkDefaultFont", 9, "bold")
+            cell_font = ("TkDefaultFont", 9)
+
+            for c, h in enumerate(headers):
+                w = col_widths[c] if col_widths else 20
+                tk.Label(tf, text=h, bg=SEC_BG, font=hdr_font,
+                         width=w, anchor="w", padx=6, pady=2,
+                         relief="flat", bd=0).grid(row=0, column=c, sticky="nsew", padx=1, pady=1)
+
+            for r, row_data in enumerate(rows, start=1):
+                bg = "white" if r % 2 == 0 else ALT_BG
+                for c, val in enumerate(row_data):
+                    w = col_widths[c] if col_widths else 20
+                    tk.Label(tf, text=val, bg=bg, font=cell_font,
+                             width=w, anchor="w", padx=6, pady=2,
+                             relief="flat", bd=0).grid(row=r, column=c, sticky="nsew", padx=1, pady=0)
+
+        def _note(text):
+            tk.Label(inner, text=text, fg="#555", font=("TkDefaultFont", 8, "italic"),
+                     anchor="w", wraplength=820, justify="left"
+                     ).pack(fill="x", padx=20, pady=(0, 2))
+
+        # ═══════════════════════════════════════════════════
+        # 1. BUDOWA NOWEJ SKOCZNI – tabela K
+        # ═══════════════════════════════════════════════════
+        _section("BUDOWA NOWEJ SKOCZNI – punkt K")
+        _table(inner,
+               ["Punkt K", "Koszt budowy"],
+               [
+                   ("K-65",  "125 000 €"),
+                   ("K-70",  "150 000 €"),
+                   ("K-75",  "175 000 €"),
+                   ("K-80",  "200 000 €"),
+                   ("K-85",  "225 000 €"),
+                   ("K-90",  "250 000 €"),
+                   ("K-95",  "275 000 €"),
+                   ("K-100", "300 000 €"),
+                   ("K-105", "400 000 €"),
+                   ("K-110", "450 000 €"),
+                   ("K-115", "475 000 €"),
+                   ("K-120", "500 000 €"),
+                   ("K-125", "525 000 €"),
+                   ("K-130", "550 000 €"),
+                   ("K-135", "575 000 €"),
+                   ("K-140", "600 000 €"),
+                   ("K-165", "650 000 €"),
+                   ("K-170", "700 000 €"),
+                   ("K-175", "750 000 €"),
+                   ("K-180", "800 000 €"),
+                   ("K-185", "850 000 €"),
+                   ("K-190", "900 000 €"),
+                   ("K-195", "950 000 €"),
+                   ("K-200", "1 000 000 €"),
+                   ("K-205", "1 050 000 €"),
+                   ("K-210", "1 100 000 €"),
+                   ("K-215", "1 150 000 €"),
+                   ("K-220", "1 200 000 €"),
+                   ("K-225", "1 250 000 €"),
+               ],
+               col_widths=[18, 22])
+        _note("Zmiana K przy rozbudowie: płacisz różnicę cen z tej tabeli (tylko wzrost K jest płatny).")
+        _note("Zmiana HS: BEZPŁATNA. HS nie ma własnej ceny — wpływa tylko na koszt igielitu (HS × 500 €).")
+
+        # ═══════════════════════════════════════════════════
+        # 2. BUDOWA – infrastruktura
+        # ═══════════════════════════════════════════════════
+        _section("BUDOWA NOWEJ SKOCZNI – infrastruktura")
+        _table(inner,
+               ["Element", "Opcja / wartość", "Koszt (budowa)", "Koszt (rozbudowa)"],
+               [
+                   ("Miejsca dla kibiców", "każde miejsce",        "58 €/miejsce",   "58 €/miejsce (tylko przyrost)"),
+                   ("Oświetlenie (OŚ)",    "każde 500 jednostek",  "80 000 €",        "80 000 € (tylko przyrost)"),
+                   ("Igielit",             "wł. (–→+)",            "HS × 500 €",      "HS × 500 € (tylko –→+)"),
+                   ("Tablica wyników",     "zwykła",               "40 000 €",        "40 000 €"),
+                   ("Tablica wyników",     "elektroniczna",        "100 000 €",       "100 000 €"),
+                   ("Kabina komentatorska","poz. 1",               "40 000 €",        "40 000 €"),
+                   ("Kabina komentatorska","poz. 2",               "70 000 €",        "70 000 €"),
+                   ("Kabina komentatorska","poz. 3",               "110 000 €",       "110 000 €"),
+                   ("Kabina komentatorska","poz. 4",               "150 000 €",       "150 000 €"),
+                   ("Kabina komentatorska","poz. 5",               "200 000 €",       "200 000 €"),
+                   ("Kabina sędziowska",   "+",                    "50 000 €",        "50 000 € (tylko –→+)"),
+                   ("Poczekalnia",         "niski",                "25 000 €",        "25 000 €"),
+                   ("Poczekalnia",         "średni",               "75 000 €",        "75 000 €"),
+                   ("Poczekalnia",         "dobry",                "125 000 €",       "125 000 €"),
+                   ("Poczekalnia",         "wyborny",              "250 000 €",       "250 000 €"),
+                   ("Siatka wiatrochłonna","wł. (–→+)",            "75 000 €",        "75 000 € (tylko –→+)"),
+                   ("Naśnieżanie",         "klasa A",              "100 000 €",       "100 000 €"),
+                   ("Naśnieżanie",         "klasa B",              "300 000 €",       "300 000 €"),
+               ],
+               col_widths=[24, 26, 22, 30])
+        _note("Rozbudowa: płacisz pełną cenę docelowej opcji (np. upgrade z Kk poz.2 na poz.4 kosztuje 150 000 €, nie różnicę).")
+        _note("Wyjątek: Miejsca i OŚ — płacisz tylko za przyrost (różnicę). Kabina sędziowska i Siatka — tylko przy zmianie –→+.")
+
+        # ═══════════════════════════════════════════════════
+        # 3. DODATKOWE KOSZTY – typ inwestycji
+        # ═══════════════════════════════════════════════════
+        _section("BUDOWA – dodatkowe koszty wg typu inwestycji")
+        _table(inner,
+               ["Typ inwestycji", "Baza kosztów", "Dopłata", "Zniżka"],
+               [
+                   ("Nowa skocznia",
+                    "pełna infrastruktura",
+                    "+300 000 €",
+                    "—"),
+                   ("Nowa skocznia w kraju",
+                    "pełna infrastruktura",
+                    "+300 000 € + +300 000 €",
+                    "−50 % od całości"),
+                   ("Nowa normalna w kompleksie",
+                    "tylko K + igielit",
+                    "+200 000 €",
+                    "—"),
+                   ("Nowa duża w kompleksie",
+                    "tylko K + igielit",
+                    "+500 000 €",
+                    "—"),
+                   ("Nowa mamucia w kompleksie",
+                    "tylko K + igielit",
+                    "+1 000 000 €",
+                    "—"),
+               ],
+               col_widths=[30, 26, 28, 22])
+        _note("'Nowa skocznia w kraju': najpierw sumuje się K + infrastruktura + obie dopłaty (300k+300k), potem całość ×0,5.")
+
+        # ═══════════════════════════════════════════════════
+        # 4. UTRZYMANIE ROCZNE (z Kompleksy S51.csv)
+        # ═══════════════════════════════════════════════════
+        _section("UTRZYMANIE ROCZNE (koszt per kompleks, z zakładki Kompleksy)")
+        _table(inner,
+               ["Element", "Opcja / wartość", "Koszt roczny"],
+               [
+                   ("Miejsca dla kibiców", "0–10 000 miejsc",       "2 €/miejsce"),
+                   ("Miejsca dla kibiców", "10 001–20 000",          "3 €/miejsce"),
+                   ("Miejsca dla kibiców", "20 001–30 000",          "5 €/miejsce"),
+                   ("Miejsca dla kibiców", "30 001–50 000",          "8 €/miejsce"),
+                   ("Miejsca dla kibiców", "50 001–75 000",          "12 €/miejsce"),
+                   ("Miejsca dla kibiców", "75 001+",                "20 €/miejsce"),
+                   ("Oświetlenie (OŚ)",    "każde 500 jednostek",   "5 000 €"),
+                   ("Tablica wyników",     "zwykła",                 "5 000 €"),
+                   ("Tablica wyników",     "elektroniczna",          "12 000 €"),
+                   ("Kabina komentatorska","poz. 1",                 "5 000 €"),
+                   ("Kabina komentatorska","poz. 2",                 "10 000 €"),
+                   ("Kabina komentatorska","poz. 3",                 "20 000 €"),
+                   ("Kabina komentatorska","poz. 4",                 "30 000 €"),
+                   ("Kabina komentatorska","poz. 5",                 "40 000 €"),
+                   ("Kabina sędziowska",   "+",                      "5 000 €"),
+                   ("Poczekalnia",         "niski",                  "5 000 €"),
+                   ("Poczekalnia",         "średni",                 "10 000 €"),
+                   ("Poczekalnia",         "dobry",                  "20 000 €"),
+                   ("Poczekalnia",         "wyborny",                "30 000 €"),
+                   ("Siatka wiatrochłonna","wł. (+)",                "5 000 €"),
+                   ("Naśnieżanie",         "klasa A",                "5 000 €"),
+                   ("Naśnieżanie",         "klasa B",                "15 000 €"),
+               ],
+               col_widths=[24, 26, 22])
+        _note("Koszt utrzymania liczony jest per kompleks (Reprezentacja+Kraj+Miasto), nie per skocznia.")
+        _note("Stawki dla miejsc są progresywne: obowiązuje jednolita stawka dla CAŁEJ pojemności według progu (np. 25 000 miejsc → 5 €/miejsce od każdego).")
+
+        _bind_wheel(inner)
 
     # --- Zakładka: inwestycje w centra infrastruktury (ME/EK/IN/ED) ---
     def _build_infra_upgrade_tab(self, parent):
