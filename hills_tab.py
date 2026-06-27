@@ -3307,6 +3307,7 @@ class HillsTab(ttk.Frame):
                col_widths=[18, 22])
         _note("Zmiana K przy rozbudowie: płacisz |różnicę| cen z tej tabeli × 10 — dotyczy zarówno wzrostu, jak i obniżenia K.")
         _note("Zmiana HS: BEZPŁATNA. HS nie ma własnej ceny — wpływa tylko na koszt igielitu (HS × 500 €).")
+        _note("Ograniczenie: HS ≤ K × 1,15 (np. K=100 → max HS=115; K=120 → max HS=138). System blokuje zapis przy przekroczeniu.")
         _note("Zmiana K lub HS jest automatycznie zapisywana do bazy danych manager_skokow.db.")
 
         # ═══════════════════════════════════════════════════
@@ -5320,6 +5321,24 @@ class HillBuilderTab(ttk.Frame):
         new_vals = {h: (self.edit_inputs.get(h).get().strip() if hasattr(self.edit_inputs.get(h), "get") else "")
                     for h in HEADERS}
 
+        # Walidacja: HS ≤ K × 1.15
+        try:
+            _k_raw  = new_vals.get("K",  "")
+            _hs_raw = new_vals.get("HS", "")
+            _k_num  = int(float(_k_raw.replace(",", ".")))  if _k_raw  else 0
+            _hs_num = int(float(_hs_raw.replace(",", "."))) if _hs_raw else 0
+            if _k_num > 0 and _hs_num > 0:
+                _hs_max = int(_k_num * 1.15)
+                if _hs_num > _hs_max:
+                    messagebox.showwarning(
+                        "Uwaga",
+                        f"HS={_hs_num} przekracza dopuszczalne maksimum dla K={_k_num}.\n"
+                        f"Maksymalny HS = K × 1,15 = {_hs_max}."
+                    )
+                    return
+        except Exception:
+            pass
+
         # znajdź wiersz
         idxs = self._df_edit.index[self._df_edit["_KEY_"] == key]
         if len(idxs) == 0:
@@ -5590,6 +5609,24 @@ class HillBuilderTab(ttk.Frame):
         if not val.get("Miasto") or not val.get("Skocznia"):
             messagebox.showwarning("Uwaga", "Wymagane pola: Miasto i Skocznia.")
             return
+
+        # Walidacja: HS ≤ K × 1.15
+        _k_raw  = val.get("K",  "")
+        _hs_raw = val.get("HS", "")
+        try:
+            _k_num  = int(float(_k_raw.replace(",", ".")))  if _k_raw  else 0
+            _hs_num = int(float(_hs_raw.replace(",", "."))) if _hs_raw else 0
+            if _k_num > 0 and _hs_num > 0:
+                _hs_max = int(_k_num * 1.15)
+                if _hs_num > _hs_max:
+                    messagebox.showwarning(
+                        "Uwaga",
+                        f"HS={_hs_num} przekracza dopuszczalne maksimum dla K={_k_num}.\n"
+                        f"Maksymalny HS = K × 1,15 = {_hs_max}."
+                    )
+                    return
+        except Exception:
+            pass
 
         # ——— 4) Zbuduj wiersz zgodnie z HEADERS (lekka normalizacja) ———
         row = {h: "" for h in HEADERS}
