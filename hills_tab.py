@@ -5407,7 +5407,40 @@ class HillBuilderTab(ttk.Frame):
                     w.writerow([row[h] for h in HEADERS])
 
             messagebox.showinfo("Sukces", f"Dopisano skocznię do:\n{p}")
-            
+
+            # ——— INSERT do manager_skokow.db ———
+            try:
+                import sqlite3
+                import pandas as pd
+                db_path = Path(__file__).parent / "manager_skokow.db"
+                k_int = None
+                hs_int = None
+                try:
+                    k_val = self._parse_int(row.get("K", ""))
+                    k_int = None if (k_val is None or pd.isna(k_val)) else int(k_val)
+                except Exception:
+                    pass
+                try:
+                    hs_val = self._parse_int(row.get("HS", ""))
+                    hs_int = None if (hs_val is None or pd.isna(hs_val)) else int(hs_val)
+                except Exception:
+                    pass
+                with sqlite3.connect(db_path) as db:
+                    exists = db.execute(
+                        "SELECT 1 FROM skocznie WHERE kraj=? AND miasto=? AND skocznia=? LIMIT 1",
+                        (row["Kraj"], row["Miasto"], row["Skocznia"])
+                    ).fetchone()
+                    if not exists:
+                        db.execute(
+                            "INSERT INTO skocznie (kraj, miasto, skocznia, k, hs) VALUES (?, ?, ?, ?, ?)",
+                            (row["Kraj"], row["Miasto"], row["Skocznia"], k_int, hs_int)
+                        )
+            except Exception as e:
+                messagebox.showwarning(
+                    "Uwaga",
+                    f"Dopisano do CSV, ale nie udało się dodać do bazy danych:\n{e}"
+                )
+
             try:
                 # HillsTab nasłuchuje na ten event i sama wywoła przeliczenie kosztów
                 self.master.event_generate("<<HILLS_COMPLEXES_REFRESH>>", when="tail")
