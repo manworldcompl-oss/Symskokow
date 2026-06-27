@@ -1669,7 +1669,13 @@ class CsvViewer(ttk.Frame):
     def _read_csv(self, path: Path) -> pd.DataFrame:
         if not path or not Path(path).exists():
             return pd.DataFrame()
-        for args in ({}, {"sep":";"}, {"sep":";","encoding":"cp1250"}, {"sep":";","encoding":"latin1"}):
+        for args in (
+            {"sep": ";", "encoding": "utf-8-sig"},
+            {"sep": ";"},
+            {"sep": ";", "encoding": "cp1250"},
+            {"sep": ";", "encoding": "latin1"},
+            {},
+        ):
             try:
                 return pd.read_csv(path, **args)
             except Exception:
@@ -1870,7 +1876,13 @@ class InfraCanvasGrid(ttk.Frame):
 
     def _read_csv(self, path: Path) -> pd.DataFrame:
         if not path or not Path(path).exists(): return pd.DataFrame()
-        for args in ({}, {"sep":";"}, {"sep":";","encoding":"cp1250"}, {"sep":";","encoding":"latin1"}):
+        for args in (
+            {"sep": ";", "encoding": "utf-8-sig"},
+            {"sep": ";"},
+            {"sep": ";", "encoding": "cp1250"},
+            {"sep": ";", "encoding": "latin1"},
+            {},
+        ):
             try:
                 return pd.read_csv(path, **args)
             except Exception:
