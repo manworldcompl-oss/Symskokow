@@ -1194,10 +1194,45 @@ class PlayerDBFrame(ttk.Frame):
                     return _DROP_W_OVER40
                 return _DROP_W.get(wiek, (0, 0))
 
+        # Wczytaj poziomy Centrum Żywieniowego dla każdego kraju
+        _zy_map: dict = {}
+        _infra_path = current_path.parent / f"Infrastruktura {old_tag}.csv"
+        if _infra_path.exists():
+            try:
+                for _enc in ("utf-8-sig", "utf-8", "cp1250"):
+                    try:
+                        _di = pd.read_csv(_infra_path, sep=None, engine="python",
+                                          dtype=str, encoding=_enc)
+                        break
+                    except Exception:
+                        continue
+                else:
+                    _di = pd.DataFrame()
+                if not _di.empty:
+                    _di.columns = [str(c).strip() for c in _di.columns]
+                    _nat_c = next((c for c in _di.columns
+                                   if c.upper() in ("KRAJ", "NAT", "COUNTRY")), None)
+                    _zy_c  = next((c for c in _di.columns
+                                   if "YWIENIOW" in c.upper() or c.upper() == "ZY"), None)
+                    if _nat_c and _zy_c:
+                        for _, _r in _di.iterrows():
+                            _nat = str(_r[_nat_c]).strip().upper()
+                            try:
+                                _lv = max(0, min(5, int(float(str(_r[_zy_c]).replace(",", ".")))))
+                            except Exception:
+                                _lv = 0
+                            if _nat and _nat != "NAN":
+                                _zy_map[_nat] = _lv
+            except Exception:
+                pass
+
         for idx, row in df.iterrows():
             plec = str(row.get("Płeć", "M")).strip().upper()
             wiek = int(row.get("Wiek", 0))
-            drop_um, drop_forma = _get_drop(plec, wiek)
+            nat  = str(row.get("Kraj", "")).strip().upper()
+            zy_level = _zy_map.get(nat, 0)
+            effective_wiek = max(11, wiek - zy_level)
+            drop_um, drop_forma = _get_drop(plec, effective_wiek)
             new_um = max(0, int(row.get("UM", 0)) - drop_um)
             new_forma = max(0, int(row.get("Forma", 0)) - drop_forma)
             df.at[idx, "UM"] = new_um
