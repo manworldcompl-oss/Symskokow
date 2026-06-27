@@ -1133,11 +1133,20 @@ class AcademyFrame(ttk.Frame):
         idx_need: set = set()
 
         for kraj, grp in df.groupby("Kraj"):
-            cur = juniors_per_country.get(str(kraj).strip().upper(), 0)
+            nat_key = str(kraj).strip().upper()
+
+            # Zasada 1: zawsze wyciągamy najlepszego 11-latka (jeśli jest)
+            grp_11 = grp[grp["_wiek"] == 11].sort_values("_sila", ascending=False)
+            if not grp_11.empty:
+                idx_need.add(grp_11.index[0])
+
+            # Zasada 2: uzupełnij do min. 4 juniorów w kadrze
+            cur = juniors_per_country.get(nat_key, 0)
             needed = max(0, 4 - cur)
             if needed > 0:
-                # tylko zawodnicy ≥15 lat (nie 12/13 i nie 14-latkowie, ci już oznaczeni)
-                eligible = grp[~grp.index.isin(idx_skip | idx_14)]
+                # Kandydaci: nie pomijani (12/13), nie 14-latkowie, nie już zaznaczeni
+                already = idx_14 | idx_need
+                eligible = grp[~grp.index.isin(idx_skip | already)]
                 grp_sorted = eligible.sort_values("_sila", ascending=False)
                 idx_need.update(grp_sorted.head(needed).index.tolist())
 
@@ -1167,7 +1176,7 @@ class AcademyFrame(ttk.Frame):
         messagebox.showinfo(
             f"Kandydaci do kadry — {tag}",
             f"14-latków (pomarańczowe, zawsze): {len(idx_14)}\n"
-            f"Najlepszych ≥15 lat do uzupełnienia min. 4 (zielone): {len(idx_need)}\n"
+            f"Zielone (najlepszy 11-latek per kraj + uzupełnienie do min. 4): {len(idx_need)}\n"
             f"Pominiętych 12–13 lat: {len(idx_skip)}\n"
             f"Łącznie zaznaczonych: {len(to_select)}{note}",
             parent=self,
