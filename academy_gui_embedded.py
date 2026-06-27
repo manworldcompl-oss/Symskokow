@@ -57,6 +57,28 @@ __all__ = [
     "build_academies_root",
 ]
 
+# Grupy krajów do kolorowania wyciągniętych juniorów: nazwa → (zbiór NAT, kolor tła)
+JUNIOR_COUNTRY_GROUPS: dict = {
+    "persian":  ({"AFG", "IRI"},                                                              "#FFE0D0"),
+    "azerbaij": ({"AZE"},                                                                     "#D0F0F8"),
+    "bengali":  ({"BHU", "BAN"},                                                              "#D0EDDA"),
+    "russian":  ({"BLR", "BUL", "KAZ", "KGZ", "MGL", "RUS", "TJK", "UZB"},                  "#E3D8F0"),
+    "muslim":   ({"BRN", "IRQ", "KSA", "LBA", "QAT", "SOM", "SUD", "TUN", "UAE", "YEM"},    "#FFF3CC"),
+    "egyptian": ({"EGY"},                                                                     "#FAEBD0"),
+    "hindi":    ({"IND"},                                                                     "#FFE8CC"),
+    "hebrew":   ({"ISR"},                                                                     "#D5E8F8"),
+    "laotian":  ({"LAO"},                                                                     "#FFD5D5"),
+    "moroccan": ({"MAR"},                                                                     "#E8D5F0"),
+    "nepalese": ({"NEP"},                                                                     "#F8D5E8"),
+    "thai":     ({"THA"},                                                                     "#D5F0EE"),
+}
+# Odwrotny słownik: NAT → tag
+_NAT_TO_GROUP_TAG: dict = {
+    nat: f"grp_{grp}"
+    for grp, (nats, _) in JUNIOR_COUNTRY_GROUPS.items()
+    for nat in nats
+}
+
 # Globalny schowek
 _FAKER_CACHE = {}
 FAKER_LOCALES = {}
@@ -1913,8 +1935,8 @@ class AcademyRootFrame(ttk.Frame):
             selectmode="browse",
             height=22,
         )
-        tv.tag_configure("highlight_asia", background="#e1f5fe") 
-        tv.tag_configure("highlight_slavic", background="#f3e5f5")
+        for grp, (_, color) in JUNIOR_COUNTRY_GROUPS.items():
+            tv.tag_configure(f"grp_{grp}", background=color)
         vsb = ttk.Scrollbar(parent, orient="vertical", command=tv.yview)
         hsb = ttk.Scrollbar(parent, orient="horizontal", command=tv.xview)
         tv.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -1951,10 +1973,6 @@ class AcademyRootFrame(ttk.Frame):
         return tv
 
     def _load_logs_into_tables(self) -> None:
-        # Listy krajów do wyróżnienia
-        group_asia = {"AFG", "AZE", "BAN", "BHU", "IND", "IRI", "ISR", "KOR", "KSA", "LAO", "MAR", "NEP", "SOM", "THA", "TUN"}
-        group_slavic = {"BLR", "BUL", "GEO", "MGL", "RUS", "TJK"}
-
         specs = [
             ("M", EXTRACTED_M_PATH, self.tv_extracted, self._img_extracted),
             ("W", EXTRACTED_W_PATH, self.tv_extracted, self._img_extracted),
@@ -1982,9 +2000,7 @@ class AcademyRootFrame(ttk.Frame):
                 for _, row in df.iterrows():
                     kraj = str(row['Kraj']).strip().upper()
                     
-                    row_tag = ""
-                    if kraj in group_asia: row_tag = "highlight_asia"
-                    elif kraj in group_slavic: row_tag = "highlight_slavic"
+                    row_tag = _NAT_TO_GROUP_TAG.get(kraj, "")
 
                     img = self._get_flag(kraj)
                     if img:
