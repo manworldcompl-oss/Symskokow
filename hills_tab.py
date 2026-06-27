@@ -3151,11 +3151,11 @@ class HillsTab(ttk.Frame):
                 )
                 if homo_col_orig:
                     orig_df[homo_col_orig] = df["Homologacja"].values
-                    orig_df.to_csv(p, sep=";", index=False, encoding="utf-8")
+                    orig_df.to_csv(p, sep=";", index=False, encoding="cp1250")
                 else:
-                    df.to_csv(p, sep=";", index=False, encoding="utf-8")
+                    df.to_csv(p, sep=";", index=False, encoding="cp1250")
             else:
-                df.to_csv(p, sep=";", index=False, encoding="utf-8")
+                df.to_csv(p, sep=";", index=False, encoding="cp1250")
 
             messagebox.showinfo("OK", f"Zapisano. Zmieniono klasy dla {changes} skoczni.")
             self.hills_viewer.refresh()
