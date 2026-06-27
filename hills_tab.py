@@ -3586,7 +3586,7 @@ class HillsTab(ttk.Frame):
             elif c == "Cena":
                 txt = "Cena"
             elif c.endswith("_old"):
-                txt = f"{c.split('_')[0]} (obecnie)"
+                txt = f"{c.split('_')[0]} (ob)"
             elif c.endswith("_new"):
                 txt = f"{c.split('_')[0]} (po)"
             else:
