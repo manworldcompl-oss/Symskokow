@@ -863,7 +863,7 @@ def _fmt_eur(df, cols, with_symbol=True):
     return out
 
 def _build_k_cost(val) -> int:
-    """Cennik punktu K przy budowie nowej skoczni."""
+    """Cennik punktu K. Wartości spoza tabeli: interpolacja liniowa między sąsiednimi węzłami."""
     k = _to_int_safe(val)
     table = {
         65: 125_000,
@@ -896,7 +896,21 @@ def _build_k_cost(val) -> int:
         220: 1_200_000,
         225: 1_250_000,
     }
-    return int(table.get(k, 0))
+    if k <= 0:
+        return 0
+    if k in table:
+        return int(table[k])
+    keys = sorted(table.keys())
+    if k < keys[0]:
+        return 0
+    if k > keys[-1]:
+        k0, k1 = keys[-2], keys[-1]
+        v0, v1 = table[k0], table[k1]
+        return int(round(v0 + (k - k0) / (k1 - k0) * (v1 - v0)))
+    k0 = max(kk for kk in keys if kk <= k)
+    k1 = min(kk for kk in keys if kk >= k)
+    v0, v1 = table[k0], table[k1]
+    return int(round(v0 + (k - k0) / (k1 - k0) * (v1 - v0)))
 
 # --- bazowy koszt z pojedynczego "snapshota" (budowa) ---
 def _snapshot_base_cost(row) -> int:
@@ -1028,13 +1042,12 @@ def _rebuild_cost(row_before, row_after) -> int:
 
     import math
 
-    # K – różnica w cenniku (tylko w górę)
+    # K – |różnica w cenniku| × 10, w obie strony
     k_b = nb("K", "k")
     k_a = na("K", "k")
     if k_a and k_a != k_b:
-        diff = _build_k_cost(k_a) - _build_k_cost(k_b)
-        if diff > 0:
-            cost += diff
+        diff = abs(_build_k_cost(k_a) - _build_k_cost(k_b))
+        cost += diff * 10
 
     # HS – do igielitu
     hs_a = na("HS", "Hs", "hs") or nb("HS", "Hs", "hs")
@@ -3306,8 +3319,11 @@ class HillsTab(ttk.Frame):
                    ("K-225", "1 250 000 €"),
                ],
                col_widths=[18, 22])
-        _note("Zmiana K przy rozbudowie: płacisz różnicę cen z tej tabeli (tylko wzrost K jest płatny).")
+        _note("K spoza tabeli (np. K=123): koszt interpolowany liniowo między sąsiednimi węzłami (K=120→500 000 €, K=125→525 000 €) → K=123 = 515 000 €.")
+        _note("Zmiana K przy rozbudowie: płacisz |różnicę| cen z tej tabeli × 10 — dotyczy zarówno wzrostu, jak i obniżenia K.")
         _note("Zmiana HS: BEZPŁATNA. HS nie ma własnej ceny — wpływa tylko na koszt igielitu (HS × 500 €).")
+        _note("Ograniczenie: HS ≤ K × 1,15 (np. K=100 → max HS=115; K=120 → max HS=138). System blokuje zapis przy przekroczeniu.")
+        _note("Zmiana K lub HS jest automatycznie zapisywana do bazy danych manager_skokow.db.")
 
         # ═══════════════════════════════════════════════════
         # 2. BUDOWA – infrastruktura
@@ -5320,6 +5336,24 @@ class HillBuilderTab(ttk.Frame):
         new_vals = {h: (self.edit_inputs.get(h).get().strip() if hasattr(self.edit_inputs.get(h), "get") else "")
                     for h in HEADERS}
 
+        # Walidacja: HS ≤ K × 1.15
+        try:
+            _k_raw  = new_vals.get("K",  "")
+            _hs_raw = new_vals.get("HS", "")
+            _k_num  = int(float(_k_raw.replace(",", ".")))  if _k_raw  else 0
+            _hs_num = int(float(_hs_raw.replace(",", "."))) if _hs_raw else 0
+            if _k_num > 0 and _hs_num > 0:
+                _hs_max = int(_k_num * 1.15)
+                if _hs_num > _hs_max:
+                    messagebox.showwarning(
+                        "Uwaga",
+                        f"HS={_hs_num} przekracza dopuszczalne maksimum dla K={_k_num}.\n"
+                        f"Maksymalny HS = K × 1,15 = {_hs_max}."
+                    )
+                    return
+        except Exception:
+            pass
+
         # znajdź wiersz
         idxs = self._df_edit.index[self._df_edit["_KEY_"] == key]
         if len(idxs) == 0:
@@ -5415,6 +5449,32 @@ class HillBuilderTab(ttk.Frame):
             self._append_rebuild_snapshots(old_vals, new_vals)
         except Exception as e:
             messagebox.showwarning("Uwaga", f"Zapis zmian OK, ale nie dopisano logu do 'Rozbudowa S51.csv':\n{e}")
+
+        # UPDATE K, HS (i nazwy) w manager_skokow.db
+        try:
+            import sqlite3
+            import pandas as pd
+            from pathlib import Path as _Path
+            db_path = _Path(__file__).parent / "manager_skokow.db"
+            old_kraj     = str(old_vals.get("Kraj",     "")).strip()
+            old_miasto   = str(old_vals.get("Miasto",   "")).strip()
+            old_skocznia = str(old_vals.get("Skocznia", "")).strip()
+            new_kraj     = str(new_vals.get("Kraj",     "")).strip()
+            new_miasto   = str(new_vals.get("Miasto",   "")).strip()
+            new_skocznia = str(new_vals.get("Skocznia", "")).strip()
+            k_val  = self._parse_int(new_vals.get("K",  ""))
+            hs_val = self._parse_int(new_vals.get("HS", ""))
+            k_int  = None if (k_val  is None or pd.isna(k_val))  else int(k_val)
+            hs_int = None if (hs_val is None or pd.isna(hs_val)) else int(hs_val)
+            with sqlite3.connect(db_path) as db:
+                db.execute(
+                    "UPDATE skocznie SET kraj=?, miasto=?, skocznia=?, k=?, hs=? "
+                    "WHERE kraj=? AND miasto=? AND skocznia=?",
+                    (new_kraj, new_miasto, new_skocznia, k_int, hs_int,
+                     old_kraj, old_miasto, old_skocznia),
+                )
+        except Exception as e:
+            messagebox.showwarning("Uwaga", f"Zapis do CSV OK, ale nie zaktualizowano bazy danych:\n{e}")
 
         # Komunikat końcowy
         if siostry_names and changed_complex:
@@ -5564,6 +5624,24 @@ class HillBuilderTab(ttk.Frame):
         if not val.get("Miasto") or not val.get("Skocznia"):
             messagebox.showwarning("Uwaga", "Wymagane pola: Miasto i Skocznia.")
             return
+
+        # Walidacja: HS ≤ K × 1.15
+        _k_raw  = val.get("K",  "")
+        _hs_raw = val.get("HS", "")
+        try:
+            _k_num  = int(float(_k_raw.replace(",", ".")))  if _k_raw  else 0
+            _hs_num = int(float(_hs_raw.replace(",", "."))) if _hs_raw else 0
+            if _k_num > 0 and _hs_num > 0:
+                _hs_max = int(_k_num * 1.15)
+                if _hs_num > _hs_max:
+                    messagebox.showwarning(
+                        "Uwaga",
+                        f"HS={_hs_num} przekracza dopuszczalne maksimum dla K={_k_num}.\n"
+                        f"Maksymalny HS = K × 1,15 = {_hs_max}."
+                    )
+                    return
+        except Exception:
+            pass
 
         # ——— 4) Zbuduj wiersz zgodnie z HEADERS (lekka normalizacja) ———
         row = {h: "" for h in HEADERS}
