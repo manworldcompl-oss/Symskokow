@@ -863,7 +863,7 @@ def _fmt_eur(df, cols, with_symbol=True):
     return out
 
 def _build_k_cost(val) -> int:
-    """Cennik punktu K przy budowie nowej skoczni."""
+    """Cennik punktu K. Wartości spoza tabeli: interpolacja liniowa między sąsiednimi węzłami."""
     k = _to_int_safe(val)
     table = {
         65: 125_000,
@@ -896,7 +896,21 @@ def _build_k_cost(val) -> int:
         220: 1_200_000,
         225: 1_250_000,
     }
-    return int(table.get(k, 0))
+    if k <= 0:
+        return 0
+    if k in table:
+        return int(table[k])
+    keys = sorted(table.keys())
+    if k < keys[0]:
+        return 0
+    if k > keys[-1]:
+        k0, k1 = keys[-2], keys[-1]
+        v0, v1 = table[k0], table[k1]
+        return int(round(v0 + (k - k0) / (k1 - k0) * (v1 - v0)))
+    k0 = max(kk for kk in keys if kk <= k)
+    k1 = min(kk for kk in keys if kk >= k)
+    v0, v1 = table[k0], table[k1]
+    return int(round(v0 + (k - k0) / (k1 - k0) * (v1 - v0)))
 
 # --- bazowy koszt z pojedynczego "snapshota" (budowa) ---
 def _snapshot_base_cost(row) -> int:
@@ -3305,6 +3319,7 @@ class HillsTab(ttk.Frame):
                    ("K-225", "1 250 000 €"),
                ],
                col_widths=[18, 22])
+        _note("K spoza tabeli (np. K=123): koszt interpolowany liniowo między sąsiednimi węzłami (K=120→500 000 €, K=125→525 000 €) → K=123 = 515 000 €.")
         _note("Zmiana K przy rozbudowie: płacisz |różnicę| cen z tej tabeli × 10 — dotyczy zarówno wzrostu, jak i obniżenia K.")
         _note("Zmiana HS: BEZPŁATNA. HS nie ma własnej ceny — wpływa tylko na koszt igielitu (HS × 500 €).")
         _note("Ograniczenie: HS ≤ K × 1,15 (np. K=100 → max HS=115; K=120 → max HS=138). System blokuje zapis przy przekroczeniu.")
