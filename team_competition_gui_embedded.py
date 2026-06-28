@@ -6508,7 +6508,7 @@ def build_gui(parent):
     cmb_team_week = ttk.Combobox(
         frame_team_week,
         textvariable=_team_week_var,
-        values=("4", "8", "12", "16", "20", "24", "28", "33"),
+        values=("4", "9", "14", "19", "24", "29", "34", "40"),
         width=5,
         state="readonly",
     )
@@ -6516,13 +6516,13 @@ def build_gui(parent):
 
     # Mapowanie tygodnia → runda CC/MSC (None = brak CC/MSC w tym tygodniu)
     _WEEK_TO_CC_ROUND = {
-        "4": None, "8": "1", "12": "2", "16": "3",
-        "20": "1/4", "24": "1/2", "28": "Finał", "33": None,
+        "4": None, "9": "1", "14": "2", "19": "3",
+        "24": "1/4", "29": "1/2", "34": "Finał", "40": None,
     }
     # Mapowanie tygodnia → numer rundy SWISS
     _WEEK_TO_SWISS_ROUND = {
-        "4": 1, "8": 2, "12": 3, "16": 4,
-        "20": 5, "24": 6, "28": 7, "33": 8,
+        "4": 1, "9": 2, "14": 3, "19": 4,
+        "24": 5, "29": 6, "34": 7, "40": 8,
     }
 
     def _run_team_week():
