@@ -343,7 +343,24 @@ class CalendarsFrame(ttk.Frame):
             _hills_path = next((p for p in _hills_candidates if p.exists()), None)
             if _hills_path is None:
                 raise FileNotFoundError("Nie znaleziono pliku Skocznie S51.csv obok aplikacji")
-            hills_df = pd.read_csv(_hills_path, sep=';', encoding='cp1250')
+            hills_df = None
+            for _enc in ("utf-8-sig", "utf-8", "cp1250", "latin1"):
+                try:
+                    hills_df = pd.read_csv(_hills_path, sep=';', encoding=_enc, dtype=str)
+                    break
+                except Exception:
+                    continue
+            if hills_df is None:
+                raise RuntimeError("Nie udało się odczytać pliku skoczni żadnym kodowaniem")
+            # Normalizacja nazw klas: S51 używa "CUP CLASS", S50 bez "CUP"
+            if 'Homologacja' in hills_df.columns:
+                _cls_norm = {
+                    "CONTINENTAL CLASS": "CONTINENTAL CUP CLASS",
+                    "JUNIOR CLASS":      "JUNIOR CUP CLASS",
+                }
+                hills_df['Homologacja'] = hills_df['Homologacja'].map(
+                    lambda v: _cls_norm.get(str(v).strip().upper(), str(v).strip()) if pd.notna(v) else v
+                )
         except Exception as e:
             print(f"Błąd wczytywania skoczni: {e}")
             hills_df = pd.DataFrame()
@@ -2984,7 +3001,11 @@ class HostSelectionFrame(ttk.Frame):
 
             # Filtry techniczne: 
             # Zmieniamy: dopuszczamy Junior LUB Continental, jeśli Juniorów brakuje
-            allowed_classes = ['JUNIOR CLASS', 'CONTINENTAL CLASS', 'WORLD CUP CLASS', 'OLYMPIC CLASS']
+            allowed_classes = [
+                'JUNIOR CLASS', 'JUNIOR CUP CLASS',
+                'CONTINENTAL CLASS', 'CONTINENTAL CUP CLASS',
+                'WORLD CUP CLASS', 'OLYMPIC CLASS',
+            ]
             hills = hills[hills['Homologacja'].isin(allowed_classes)]
             
             # Zakres HS dla skoczni normalnych
