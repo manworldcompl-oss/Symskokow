@@ -1539,28 +1539,30 @@ class SeasonPlannerFrame(ttk.Frame):
         is_major_season = "OG" in active_tours or "COCH" in active_tours
 
         # 1. Definicja tygodni
+        # Tygodnie ligi 1v1 (5,10,15,20,25,30,35,41) są wstawione w kalendarz,
+        # więc wszystkie pozostałe tygodnie są przesunięte względem starego harmonogramu.
         weeks = []
-        if cycle == "GP": 
-            weeks = [1, 2, 3, 5, 6]
-        elif cycle == "SCOC": 
+        if cycle == "GP":
+            weeks = [1, 2, 3, 6, 7]
+        elif cycle == "SCOC":
             weeks = [1, 2, 3]
-        elif cycle == "WC": 
-            weeks = [7, 9, 10, 11, 13, 14, 15, 17, 18, 19, 22, 23, 25, 26, 29, 30, 31, 32]
-        elif cycle == "COC": 
-            weeks = [7, 9, 10, 11, 13, 15, 17, 18, 19, 21, 22, 23, 25, 26, 27, 29, 30, 31]
-        elif cycle == "FC": 
-            weeks = [7, 10, 11, 13, 15, 17, 18, 19, 21, 22, 23, 25, 26, 27, 29]
-        
-        # --- FILTRACJA TYGODNIA 15 (OG/COCH) ---
-        if is_major_season and cycle in ["WC", "COC", "FC"]:
-            weeks = [w for w in weeks if w != 15]
+        elif cycle == "WC":
+            weeks = [8, 11, 12, 13, 16, 17, 18, 21, 22, 23, 27, 28, 31, 32, 36, 37, 38, 39]
+        elif cycle == "COC":
+            weeks = [8, 11, 12, 13, 16, 18, 21, 22, 23, 26, 27, 28, 31, 32, 33, 36, 37, 38]
+        elif cycle == "FC":
+            weeks = [8, 12, 13, 16, 18, 21, 22, 23, 26, 27, 28, 31, 32, 33, 36]
 
-        # --- FILTRACJA TYGODNI DLA KOBIET (Istniejąca logika) ---
+        # --- FILTRACJA TYGODNIA 18 (OG/COCH) – dawny tydzień 15 ---
+        if is_major_season and cycle in ["WC", "COC", "FC"]:
+            weeks = [w for w in weeks if w != 18]
+
+        # --- FILTRACJA TYGODNI DLA KOBIET ---
         if gender == "WOMEN":
             if cycle == "COC":
-                weeks = [w for w in weeks if w != 31]
+                weeks = [w for w in weeks if w != 38]   # dawny tydzień 31
             elif cycle == "FC":
-                weeks = [w for w in weeks if w != 29]
+                weeks = [w for w in weeks if w != 36]   # dawny tydzień 29
 
         # 2. Specjalna obsługa zawodów juniorskich
         if cycle in ["JC", "MC", "PC", "QC", "TC", "AC", "BC", "DC"]:
@@ -1570,7 +1572,7 @@ class SeasonPlannerFrame(ttk.Frame):
 
         # 3. Standardowe wstawianie tygodni do tabeli
         for w in weeks:
-            if cycle == "WC" and gender == "MEN" and w == 14:
+            if cycle == "WC" and gender == "MEN" and w == 17:
                 for _ in range(4):
                     tree.insert("", tk.END, values=(w, ""))
             else:
@@ -2269,26 +2271,26 @@ class SeasonPlannerFrame(ttk.Frame):
                 with open(path, "w", encoding="utf-8") as f:
                     f.write(header)
                     for w in weeks:
-                        if skip_w15 and w == 15 and cyc in ["WC", "COC", "FC"]: continue
+                        if skip_w15 and w == 18 and cyc in ["WC", "COC", "FC"]: continue
                         f.write(f"{w};;;;;\n{w};;;;;\n")
                         
     def _get_cycle_weeks(self, gender, cycle):
         """Pomocnicza funkcja zwracająca listę tygodni (powielona logika z UI)."""
         weeks = []
-        if cycle == "GP": weeks = [1, 2, 3, 5, 6]
+        if cycle == "GP": weeks = [1, 2, 3, 6, 7]
         elif cycle == "SCOC": weeks = [1, 2, 3]
-        elif cycle == "WC": weeks = [7, 9, 10, 11, 13, 14, 15, 17, 18, 19, 22, 23, 25, 26, 29, 30, 31, 32]
-        elif cycle == "COC": weeks = [7, 9, 10, 11, 13, 15, 17, 18, 19, 21, 22, 23, 25, 26, 27, 29, 30, 31]
-        elif cycle == "FC": weeks = [7, 10, 11, 13, 15, 17, 18, 19, 21, 22, 23, 25, 26, 27, 29]
+        elif cycle == "WC": weeks = [8, 11, 12, 13, 16, 17, 18, 21, 22, 23, 27, 28, 31, 32, 36, 37, 38, 39]
+        elif cycle == "COC": weeks = [8, 11, 12, 13, 16, 18, 21, 22, 23, 26, 27, 28, 31, 32, 33, 36, 37, 38]
+        elif cycle == "FC": weeks = [8, 12, 13, 16, 18, 21, 22, 23, 26, 27, 28, 31, 32, 33, 36]
         elif cycle in ["JC", "MC", "PC", "QC", "TC", "AC", "BC", "DC"]: weeks = [2, 2, 2, 2]
         return weeks
 
     def _get_championship_template(self, tour, d):
         """Zwraca treść pliku CSV dla konkretnego turnieju z przedrostkiem HS i kontynentem w Dod. Inf."""
-        w = "15" 
-        if tour in ["WCH", "SFWC"]: w = "27"
-        if tour in ["IST", "NKIC"]: w = "21"
-        if tour == "JWC": w = "9"
+        w = "18"
+        if tour in ["WCH", "SFWC"]: w = "33"
+        if tour in ["IST", "NKIC"]: w = "26"
+        if tour == "JWC": w = "11"
 
         # Pomocnicza funkcja do formatowania HS
         def fmt_hs(val):
@@ -2308,11 +2310,11 @@ class SeasonPlannerFrame(ttk.Frame):
 
                 # Każdy kontynent dostaje 5 konkursów
                 # Format: WEEK;NAT;Skocznia;HS;Rodzaj;Dod. Inf.
-                res += f"15;{c_nat};{c_city};{c_hs};IND;W - {cont}\n"
-                res += f"15;{c_nat};{c_city};{c_hs};IND;M - {cont}\n"
-                res += f"15;{c_nat};{c_city};{c_hs};TEAM;W - {cont}\n"
-                res += f"15;{c_nat};{c_city};{c_hs};TEAM;M - {cont}\n"
-                res += f"15;{c_nat};{c_city};{c_hs};TEAM;MIX - {cont}\n"
+                res += f"18;{c_nat};{c_city};{c_hs};IND;W - {cont}\n"
+                res += f"18;{c_nat};{c_city};{c_hs};IND;M - {cont}\n"
+                res += f"18;{c_nat};{c_city};{c_hs};TEAM;W - {cont}\n"
+                res += f"18;{c_nat};{c_city};{c_hs};TEAM;M - {cont}\n"
+                res += f"18;{c_nat};{c_city};{c_hs};TEAM;MIX - {cont}\n"
             return res
 
         # Pozostałe turnieje (OG, WCH itd.)
@@ -2332,24 +2334,24 @@ class SeasonPlannerFrame(ttk.Frame):
                     f"{w};{d['nat']};{d['city']};{h2};TEAM;MIX\n")
         
         elif tour == "SFWC":
-            return (f"27;{d['nat']};{d['city']};{h1};IND;W - 1st day\n"
-                    f"27;{d['nat']};{d['city']};{h1};IND;W - 2nd day\n"
-                    f"27;{d['nat']};{d['city']};{h1};IND;M - 1st day\n"
-                    f"27;{d['nat']};{d['city']};{h1};IND;M - 2nd day\n"
-                    f"27;{d['nat']};{d['city']};{h1};TEAM;W\n"
-                    f"27;{d['nat']};{d['city']};{h1};TEAM;M\n"
-                    f"27;{d['nat']};{d['city']};{h1};TEAM;MIX\n")
+            return (f"33;{d['nat']};{d['city']};{h1};IND;W - 1st day\n"
+                    f"33;{d['nat']};{d['city']};{h1};IND;W - 2nd day\n"
+                    f"33;{d['nat']};{d['city']};{h1};IND;M - 1st day\n"
+                    f"33;{d['nat']};{d['city']};{h1};IND;M - 2nd day\n"
+                    f"33;{d['nat']};{d['city']};{h1};TEAM;W\n"
+                    f"33;{d['nat']};{d['city']};{h1};TEAM;M\n"
+                    f"33;{d['nat']};{d['city']};{h1};TEAM;MIX\n")
         
         elif tour in ["NKIC", "IST"]:
             res = ""
             # Dla NKIC/IST generujemy listę rund KO64/32 itd.
             for gender in ["MEN", "WOMEN"]:
                 for stage in ["Qualifications", "Round 1 / 64", "Round 1 / 32", "Round 1 / 16", "Quarterfinal", "Semifinal", "Final"]:
-                    res += f"21;{d['nat']};{d['city']};{h1};{stage};{gender}\n"
+                    res += f"26;{d['nat']};{d['city']};{h1};{stage};{gender}\n"
             if tour == "IST" and h2:
                 for gender in ["MEN", "WOMEN"]:
                     for stage in ["Qualifications", "Round 1 / 64", "Round 1 / 32", "Round 1 / 16", "Quarterfinal", "Semifinal", "Final"]:
-                        res += f"21;{d['nat']};{d['city']};{h2};{stage};{gender}\n"
+                        res += f"26;{d['nat']};{d['city']};{h2};{stage};{gender}\n"
             return res
 
         elif tour in ["JWC", "YOG", "UNI"]:
