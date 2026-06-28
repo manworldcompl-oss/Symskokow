@@ -2046,16 +2046,16 @@ class SeasonPlannerFrame(ttk.Frame):
             messagebox.showerror("Limit", f"Kraj {kraj_nowy} nie ma wystarczającego limitu!")
 
     def _apply_automatic_tcs(self, tree_dest):
-        """Automatycznie wypełnia Tydzień 14 dla WC-M i odejmuje po 1 punkcie limitu."""
+        """Automatycznie wypełnia Tydzień 17 dla WC-M i odejmuje po 1 punkcie limitu."""
         tcs_data = [
             ("Oberstdorf", "137", "GER"),
             ("Garmisch-Partenkirchen", "142", "GER"),
             ("Innsbruck", "130", "AUT"),
             ("Bischofschofen", "142", "AUT")
         ]
-        
-        # Pobierz wszystkie wiersze dla tygodnia 14
-        items_w14 = [i for i in tree_dest.get_children() if str(tree_dest.item(i)['values'][0]) == "14"]
+
+        # Pobierz wszystkie wiersze dla tygodnia 17 (TCS)
+        items_w14 = [i for i in tree_dest.get_children() if str(tree_dest.item(i)['values'][0]) == "17"]
         
         for i, (city, hs, nat) in enumerate(tcs_data):
             if i < len(items_w14):
@@ -2427,37 +2427,37 @@ class SeasonPlannerFrame(ttk.Frame):
                             else:
                                 hs = raw_hs
 
-                        # --- LOGIKA TYGODNIA 14 (TCS / 4HT) ---
-                        if cycle == "WC" and suffix == "M" and week == 14:
+                        # --- LOGIKA TYGODNIA 17 (TCS / 4HT) ---
+                        if cycle == "WC" and suffix == "M" and week == 17:
                             # Tylko 1 konkurs na wiersz w tabeli dla TCS
                             rows.append([week, nat, city, hs, "KO50", "4HT"])
                             continue # Przejdź do następnego wiersza (nie dubluj)
 
                         # --- LOGIKA RODZAJU (IND / TEAM / MIXED) ---
                         r1, r2 = "IND", "IND"
-                        if week in [22, 23, 25, 26] and cycle == "WC":
+                        if week in [27, 28, 31, 32] and cycle == "WC":
                             r1, r2 = "TEAM", "IND"
-                        elif cycle == "GP" and week == 5:
-                            r1, r2 = "MIXED", "IND"
                         elif cycle == "GP" and week == 6:
+                            r1, r2 = "MIXED", "IND"
+                        elif cycle == "GP" and week == 7:
                             r1, r2 = "TEAM", "IND"
 
                         # --- LOGIKA DOD. INF ---
                         inf1, inf2 = "", ""
                         if cycle == "WC" and suffix == "M":
-                            if week in [18, 19]: inf1 = inf2 = "NT"
-                            if week in [31, 32]: inf1 = inf2 = "FT"
+                            if week in [22, 23]: inf1 = inf2 = "NT"
+                            if week in [38, 39]: inf1 = inf2 = "FT"
                             if city == "Planica": inf1 = inf2 = "P7"
                             if city == "Willingen": inf1 = inf2 = "W5"
                             if nat == "NOR" and nor_count >= 4: inf1 = inf2 = "RAW AIR"
-                        
+
                         elif cycle == "WC" and suffix == "W":
-                            if week in [29, 30]: inf1 = inf2 = "RAW AIR"
-                            if week in [31, 32]: inf1 = inf2 = "BLUE BIRD"
+                            if week in [36, 37]: inf1 = inf2 = "RAW AIR"
+                            if week in [38, 39]: inf1 = inf2 = "BLUE BIRD"
 
                         # --- DODAWANIE WIERSZY ---
-                        # Tydzień 11 ma 3 konkursy TYLKO w cyklu WC
-                        if cycle == "WC" and week == 11:
+                        # Tydzień 13 ma 3 konkursy TYLKO w cyklu WC (dawny tydzień 11)
+                        if cycle == "WC" and week == 13:
                             num_events = 3
                         else:
                             num_events = 2 # Standardowo 2 konkursy na tydzień
