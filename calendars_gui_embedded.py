@@ -1995,9 +1995,9 @@ class SeasonPlannerFrame(ttk.Frame):
         gospodarz_stary_raw = str(tree_dest.item(target_item)['values'][1])
 
         # --- LOGIKA PUNKTACJI (Ustalenie punktów eventu) ---
-        if cycle == "WC" and tydzien == "11":
+        if cycle == "WC" and tydzien == "13":
             punkty_eventu = 3
-        elif cycle == "WC" and gender == "MEN" and tydzien == "14":
+        elif cycle == "WC" and gender == "MEN" and tydzien == "17":
             punkty_eventu = 1
         else:
             punkty_eventu = 2
@@ -2719,9 +2719,9 @@ class SeasonPlannerFrame(ttk.Frame):
         # 3. Wyciągnięcie danych do zwrotu limitu
         city = gospodarz_raw.split(" (")[0].strip()
         nat = self._get_country_by_city(city)
-        if cycle == "WC" and gender == "MEN" and tydzien == "14":
+        if cycle == "WC" and gender == "MEN" and tydzien == "17":
             punkty_do_oddania = 1
-        elif cycle == "WC" and tydzien == "11":
+        elif cycle == "WC" and tydzien == "13":
             punkty_do_oddania = 3 # Zwracamy 3 pkt tylko w cyklu WC
         else:
             punkty_do_oddania = 2
