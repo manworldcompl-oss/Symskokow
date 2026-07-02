@@ -1592,6 +1592,9 @@ class SeasonPlannerFrame(ttk.Frame):
             if cycle == "WC" and gender == "MEN" and w == 17:
                 for _ in range(4):
                     tree.insert("", tk.END, values=(w, ""))
+            elif cycle == "WC" and gender == "WOMEN" and w == 17:
+                for _ in range(2):
+                    tree.insert("", tk.END, values=(w, ""))
             else:
                 tree.insert("", tk.END, values=(w, ""))
 
@@ -1696,7 +1699,9 @@ class SeasonPlannerFrame(ttk.Frame):
         complexes = self.hills_df.groupby(['Kraj', 'Miasto']).agg({
             'Miejsca dla kibiców': 'first',
             'Homologacja': 'first',
-            'HS': lambda x: ", ".join(map(str, sorted(x.unique(), reverse=True)))
+            'HS': lambda x: ", ".join(str(v) for v in sorted(
+                [int(float(h)) for h in x.unique() if str(h).replace('.','',1).isdigit()],
+                reverse=True))
         }).reset_index()
         
         complexes['Uzycia'] = 0
@@ -1997,7 +2002,7 @@ class SeasonPlannerFrame(ttk.Frame):
         # --- LOGIKA PUNKTACJI (Ustalenie punktów eventu) ---
         if cycle == "WC" and tydzien == "13":
             punkty_eventu = 3
-        elif cycle == "WC" and gender == "MEN" and tydzien == "17":
+        elif cycle == "WC" and tydzien == "17":
             punkty_eventu = 1
         else:
             punkty_eventu = 2
@@ -2427,11 +2432,13 @@ class SeasonPlannerFrame(ttk.Frame):
                             else:
                                 hs = raw_hs
 
-                        # --- LOGIKA TYGODNIA 17 (TCS / 4HT) ---
+                        # --- LOGIKA TYGODNIA 17 (TCS / 4HT dla M, FNT dla W) ---
                         if cycle == "WC" and suffix == "M" and week == 17:
-                            # Tylko 1 konkurs na wiersz w tabeli dla TCS
                             rows.append([week, nat, city, hs, "KO50", "4HT"])
-                            continue # Przejdź do następnego wiersza (nie dubluj)
+                            continue
+                        elif cycle == "WC" and suffix == "W" and week == 17:
+                            rows.append([week, nat, city, hs, "KO50", "FNT"])
+                            continue
 
                         # --- LOGIKA RODZAJU (IND / TEAM / MIXED) ---
                         r1, r2 = "IND", "IND"
@@ -2546,7 +2553,9 @@ class SeasonPlannerFrame(ttk.Frame):
 
         # Grupuj z igielitem
         agg_dict = {
-            'HS': lambda x: sorted(x.unique(), reverse=True),
+            'HS': lambda x: sorted(
+                [int(float(h)) for h in x.unique() if str(h).replace('.','',1).isdigit()],
+                reverse=True),
             'Homologacja': lambda x: [str(i).strip().upper() for i in x.unique()],
             'Miejsca dla kibiców': 'first',
         }
@@ -2719,10 +2728,10 @@ class SeasonPlannerFrame(ttk.Frame):
         # 3. Wyciągnięcie danych do zwrotu limitu
         city = gospodarz_raw.split(" (")[0].strip()
         nat = self._get_country_by_city(city)
-        if cycle == "WC" and gender == "MEN" and tydzien == "17":
+        if cycle == "WC" and tydzien == "17":
             punkty_do_oddania = 1
         elif cycle == "WC" and tydzien == "13":
-            punkty_do_oddania = 3 # Zwracamy 3 pkt tylko w cyklu WC
+            punkty_do_oddania = 3
         else:
             punkty_do_oddania = 2
 
